@@ -1,0 +1,15 @@
+name: deep_sdf_debug
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.8.10=h12debd9_8
+  - pip:
+    - numpy==1.19.5
+      - open3d==0.16.0
+      - opencv-python==4.8.1.78
+      - plyfile==1.0.1
+      - scikit-image==0.20.0
+      - torch==2.1.0
+      - torchaudio==2.1.0
+      - torchvision==0.16.0
