@@ -5,7 +5,7 @@ channels:
 dependencies:
   - python=3.8.10=h12debd9_8
   - pip:
-      - numpy==1.19.5
+      - numpy==1.21.1
       - open3d==0.16.0
       - opencv-python==4.8.1.78
       - plyfile==1.0.1
