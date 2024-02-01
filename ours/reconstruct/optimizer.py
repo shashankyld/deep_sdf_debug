@@ -195,7 +195,7 @@ class Optimizer(object):
             t_obj_cam = torch.mm(delta_t, t_obj_cam)
             latent_vector += self.lr * delta_c.cuda()
 
-            print("Object joint optimization: Iter %d, loss: %f, sdf loss: %f, rotation loss: %f" % (e, loss, sdf_loss, rot_loss))
+            # print("Object joint optimization: Iter %d, loss: %f, sdf loss: %f, rotation loss: %f" % (e, loss, sdf_loss, rot_loss))
             # print("Object joint optimization: Iter %d, loss: %f, sdf loss: %f, "
             #       "render loss: %f, rotation loss: %f"
             #       % (e, loss, sdf_loss, render_loss, rot_loss))

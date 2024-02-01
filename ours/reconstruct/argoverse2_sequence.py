@@ -28,8 +28,9 @@ class FrameWithLiDAR:
     def __init__(self, sequence, frame_id):
         # Load sequence properties
         self.configs = sequence.configs
+        self.detection_path = sequence.detection_path
         # self.rgb_dir = sequence.rgb_dir
-        self.velo_dir = sequence.velo_dir
+        # self.velo_dir = sequence.velo_dir
         # self.lbl2d_dir = sequence.lbl2d_dir
         # self.lbl3d_dir = sequence.lbl3d_dir
         # self.K = sequence.K_cam
@@ -46,14 +47,14 @@ class FrameWithLiDAR:
         self.frame_id = frame_id
         # rgb_file = os.path.join(self.rgb_dir, "{:06d}".format(frame_id) + ".png")
         # self.velo_file = os.path.join(self.velo_dir, "{:06d}".format(frame_id) + ".bin")
-        self.velo_file = Path(self.velo_dir) / f"{self.frame_id}.npy"
+        # self.velo_file = Path(self.velo_dir) / f"{self.frame_id}.npy"
         # file = f"P04/results/pcd_argo/000/000016/{id}.npy"
 
         # self.img_bgr = cv2.imread(rgb_file)
         # self.img_rgb = cv2.cvtColor(self.img_bgr, cv2.COLOR_BGR2RGB)
         # self.img_h, self.img_w, _ = self.img_rgb.shape
         # self.velo_pts = load_velo_scan(self.velo_file)
-        self.velo_pts = load_velo_scan_argoverse2(self.velo_file)
+        # self.velo_pts = load_velo_scan_argoverse2(self.velo_file)
         self.instances = []
 
     def get_colored_pts(self):
@@ -113,14 +114,21 @@ class FrameWithLiDAR:
         # t2 = get_time()
         # print("3D detector takes %f seconds" % (t2 - t1))
         
-        # pcd_track_uuids = np.load("P04/results/pcd/000/000016/pcd-new.npy",  allow_pickle=True).item()
-        # pcd_track_uuids = np.load("/home/ohmpr/master_bonn/Modules/3rd_semester/P02/P04_Instance-Completion-and-Motion-Estimation-with-Deep-Shape-Priors-for-Autonomous-Driving/results/pcd/000/000016/pcd.npy",  allow_pickle=True).item()
-        # det = pcd_track_uuids['2f999c71-bfc0-405e-a620-574545ffb657'][6][self.frame_id]
-        # det = pcd_track_uuids['3098a954-d9d8-4b9f-85a2-5523dba98fad'][2][100]
-        # 
-        pcd_track_uuids = np.load("/home/ohmpr/master_bonn/Modules/3rd_semester/P02/P04_Instance-Completion-and-Motion-Estimation-with-Deep-Shape-Priors-for-Autonomous-Driving/results/pcd/000/000039/pcd.npy",  allow_pickle=True).item()
-        det = pcd_track_uuids['090ab8a6-9f67-4a59-a6b2-fa89d8667edf'][4][self.frame_id]
-        print("det", det)
+        detection = np.load(self.detection_path,  allow_pickle=True).item()
+
+        # Get track_uuid
+        for k, _ in detection.items():
+            first_key = k
+            break
+        track_uuid = detection[first_key]
+
+        # Get instance
+        max_number = 0
+        for k, _ in track_uuid.items():
+            if len(track_uuid[k]) > max_number:
+                max_number = len(track_uuid[k])
+                first_instance = k
+        det = detection[first_key][first_instance][self.frame_id]
 
         # sort according to depth order
         # depth_order = np.argsort(detections_3d[:, 0])
@@ -130,7 +138,7 @@ class FrameWithLiDAR:
             # det_3d = detections_3d[n, :]
             
             trans, size, theta = det['bbox'][:3], det['bbox'][3:6], det['bbox'][6]
-            theta = theta + np.deg2rad(90)
+            theta = (theta + np.deg2rad(90))
             # # Get SE(3) transformation matrix from trans and theta
             # T_velo_obj = np.array([[np.cos(theta), 0, -np.sin(theta), trans[0]],
             #                        [-np.sin(theta), 0, -np.cos(theta), trans[1]],
@@ -138,7 +146,7 @@ class FrameWithLiDAR:
             #                        [0, 0, 0, 1]]).astype(np.float32)
             T_velo_obj = np.array([[np.cos(theta), 0, -np.sin(theta), trans[0]],
                                    [-np.sin(theta), 0, -np.cos(theta), trans[1]],
-                                   [0, 1, 0, trans[2] + size[2] / 2],
+                                   [0, 1, 0, trans[2] ],
                                    [0, 0, 0, 1]]).astype(np.float32)
             # T_velo_obj = det['T_cam_obj'].astype(np.float32)
             # print("BEFORE T_velo_obj", T_velo_obj)
@@ -147,7 +155,7 @@ class FrameWithLiDAR:
             # T_velo_obj[1, 0] = T_velo_obj[1, 0] *-1
             # print("T_velo_obj", T_velo_obj)
 
-            T_obj_velo = np.linalg.inv(T_velo_obj)
+            # T_obj_velo = np.linalg.inv(T_velo_obj)
             # x, y, z = list(trans)
             # Filter out points that are too far away from car centroid, with radius 3.0 meters
             # r = 3.0
@@ -252,11 +260,13 @@ class FrameWithLiDAR:
 
 
 class Argoverse2Sequence:
-    def __init__(self, data_dir, configs):
-        self.root_dir = data_dir
+    # def __init__(self, data_dir, configs):
+    def __init__(self, detection_path, configs):
+        # self.root_dir = data_dir
+        self.detection_path = detection_path
         # self.rgb_dir = os.path.join(data_dir, "image_2")
         # self.velo_dir = os.path.join(data_dir, "velodyne")
-        self.velo_dir = os.path.join(data_dir)
+        # self.velo_dir = os.path.join(data_dir)
         # self.calib_file = os.path.join(data_dir, "calib.txt")
         self.load_calib()
         # self.num_frames = len(os.listdir(self.rgb_dir))
@@ -292,6 +302,7 @@ class Argoverse2Sequence:
                             [-0,  0, -1, -0],
                             [ 1, -0, -0, -0],
                             [ 0,  0,  0,  1]])
+        # t_velo = np.eye(4)
         self.T_cam_velo = t_velo.astype(np.float32)
 
 

@@ -17,7 +17,7 @@
 
 import open3d as o3d
 import argparse
-from reconstruct.utils import color_table, set_view, get_configs, get_decoder
+from reconstruct.utils import color_table, set_view, get_configs, get_decoder, translate_boxes_to_open3d_instance
 from reconstruct.loss_utils import get_time
 from reconstruct.kitti_sequence import KITIISequence
 from reconstruct.argoverse2_sequence import Argoverse2Sequence
@@ -44,15 +44,31 @@ if __name__ == "__main__":
     kitti_seq = Argoverse2Sequence(args.sequence_dir, configs)
     optimizer = Optimizer(decoder, configs)
 
+    pcd_track_uuids = np.load(args.sequence_dir,  allow_pickle=True).item()
+
+    # Get track_uuid
+    for k, _ in pcd_track_uuids.items():
+        first_key = k
+        break
+    track_uuid = pcd_track_uuids[first_key]
+    # Get instance
+    max_number = 0
+    for k, _ in track_uuid.items():
+        if len(track_uuid[k]) > max_number:
+            max_number = len(track_uuid[k])
+            first_instance = k
+    det = pcd_track_uuids[first_key][first_instance]
+
     detections = {}
-    for frame_id in range(156):
-        try:
-            det = kitti_seq.get_frame_by_id(frame_id)
-            detections[frame_id] = det
-            # detections += [det]
-        except:
-            print("failed", frame_id)
-            pass
+    for frame_id in pcd_track_uuids[first_key][first_instance]:
+        # try:
+        det = kitti_seq.get_frame_by_id(frame_id)
+        detections[frame_id] = det
+        # detections += [det]
+        # except:
+        #     print("failed", frame_id)
+        #     pass
+
     print("len(detections)", len(detections))
 
     # start reconstruction
@@ -89,6 +105,7 @@ if __name__ == "__main__":
     mesh_extractor = MeshExtractor(decoder, voxels_dim=64)
     first_frame = -1
     for frame_id, obj in objects_recon.items():
+        print("frame_id", frame_id)
         if first_frame == -1:
             first_frame = frame_id
         mesh = mesh_extractor.extract_mesh_from_code(obj.code)
@@ -99,6 +116,18 @@ if __name__ == "__main__":
         # Transform mesh from object to world coordinate
         mesh_o3d.transform(obj.t_cam_obj)
         mesh_o3d.transform(np.linalg.inv(t_velo))
+
+
+        bbox = mesh_o3d.get_oriented_bounding_box()
+
+        # mtx = np.linalg.inv(t_velo) @ obj.t_cam_obj
+
+        # bbox.rotate(mtx[:3, :3], center=(0, 0, 0))
+        # bbox.translate(mtx[:3, 3])
+        bbox.color = np.array([0., 0., 255. / 255.])  # blue
+        vis.add_geometry(bbox)
+
+        print(bbox)
 
         # Save
         mtx = np.linalg.inv(t_velo) @ obj.t_cam_obj

@@ -167,3 +167,31 @@ def write_mesh_to_ply(v, f, ply_filename_out):
 
     ply_data = plyfile.PlyData([el_verts, el_faces])
     ply_data.write(ply_filename_out)
+
+def translate_boxes_to_open3d_instance(bbox, crop=False):
+    """
+          4 -------- 6
+         /|         /|
+        5 -------- 3 .
+        | |        | |
+        . 7 -------- 1
+        |/         |/
+        2 -------- 0
+    https://github.com/open-mmlab/OpenPCDet/blob/master/tools/visual_utils/open3d_vis_utils.py
+    """
+    center = [bbox.x, bbox.y, bbox.z]
+    lwh = [bbox.length, bbox.width, bbox.height]
+    if not crop:
+        box3d = o3d.geometry.OrientedBoundingBox(center, bbox.rot, lwh)
+    else:
+        lwh = [bbox.length, bbox.width, bbox.height * 0.9]
+        box3d = o3d.geometry.OrientedBoundingBox(center, bbox.rot, lwh)
+
+    line_set = o3d.geometry.LineSet.create_from_oriented_bounding_box(box3d)
+    lines = np.asarray(line_set.lines)
+    lines = np.concatenate([lines, np.array([[1, 4], [7, 6]])], axis=0)
+
+    line_set.lines = o3d.utility.Vector2iVector(lines)
+    
+
+    return line_set, box3d
