@@ -43,6 +43,7 @@ python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config
 
 python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config_kitti.json --sequence_dir data/P04/cleaned_data/001/001000/pcd.npy
 
+# show this 
 python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config_kitti.json --sequence_dir data/P04/cleaned_data/001/001005/pcd.npy
 
 python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config_kitti.json --sequence_dir data/P04/cleaned_data/001/001006/pcd.npy
@@ -57,4 +58,16 @@ python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config
 
 python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config_kitti.json --sequence_dir data/P04/cleaned_data/001/001039/pcd.npy
 
-```````
+# direction still wrong
+# pause next frame code motion
+# inconsidtent over time and no using for data of mulitple frame
+# ablation first frame vs multiple frame
+# methodology tracking optimization, kiss icp pv-rcnn deepsdf
+# abstraction -> Briftly introduction 200 words
+# 1. introduction: why? what? how? *Claims
+# 2. Related works: mention the exising works
+# 3. methodology: how we do that this
+# 4. Experiemtn: explain result, desscribe dataset, evaluatuoin metric, baseline(yue pan paper), implementation deitail(parameter setting, learnng, ) show result. abltion, change some params -> should support claim
+# 5. Conclusion: repeat abstraction and disadvatange , futre work how can we imrpove
+
+```

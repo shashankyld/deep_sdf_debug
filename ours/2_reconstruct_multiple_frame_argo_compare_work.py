@@ -154,6 +154,7 @@ optimizer = Optimizer(decoder, configs)
 
 if args.sequence_dir == "data/P04/cleaned_data/000/000003/pcd.npy":
     # The detected car is being overtaken.
+    # args.sequence_dir == "data/P04/raw_data/000/000003/pcd.npy"
     gt = np.load("data/P04/gt/000/000003.npy",  allow_pickle=True).item()
 
 elif args.sequence_dir == "data/P04/cleaned_data/000/000009/pcd.npy":
@@ -185,6 +186,9 @@ elif args.sequence_dir == "data/P04/cleaned_data/001/001005/pcd.npy":
     gt = np.load("data/P04/gt/001/001005.npy",  allow_pickle=True).item()
 
 elif args.sequence_dir == "data/P04/cleaned_data/001/001006/pcd.npy":
+    '''
+    weird it turns to opopsite direction
+    '''
     # The detected car comes from an alley and merges into the main road.
     gt = np.load("data/P04/gt/001/001006.npy",  allow_pickle=True).item()
 
@@ -283,7 +287,7 @@ pcd = o3d.geometry.PointCloud()
 pcd.points = o3d.utility.Vector3dVector(instance[first_frame][pts_str])
 vis.add_geometry(pcd)
 # Orientation
-coordinate_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=5, origin=[0, 0, 0])
+coordinate_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=3, origin=[0, 0, 0])
 coordinate_frame.transform(mtx)
 prev_mtx = mtx
 vis.add_geometry(coordinate_frame)
@@ -363,12 +367,14 @@ for (frame_id,points_scan), (frame_id_recon,obj) in zip(instance.items(), object
         ############# Bounding boxes #############
         # Point Cloud
         pcd.points = o3d.utility.Vector3dVector(points_scan[pts_str])
+        # o3d.io.write_point_cloud(f"{result_dir}/{frame_id}.pcd", pcd)
         vis.update_geometry(pcd)
         
         # Orientation
         coordinate_frame.transform(np.linalg.inv(prev_mtx)) # undo previous transformation
         mtx = points_scan['T_cam_obj']
         
+        # print("frame_id", frame_id)
         coordinate_frame.transform(mtx)
         vis.update_geometry(coordinate_frame)
         

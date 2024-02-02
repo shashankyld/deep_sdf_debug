@@ -138,8 +138,9 @@ class FrameWithLiDAR:
             # det_3d = detections_3d[n, :]
             
             trans, size, theta = det['bbox'][:3], det['bbox'][3:6], det['bbox'][6]
-            theta = (theta + np.deg2rad(90))
-            # # Get SE(3) transformation matrix from trans and theta
+            theta = theta  * -1 + np.deg2rad(90)
+            # Get SE(3) transformation matrix from trans and theta
+            # https://github.com/JingwenWang95/DSP-SLAM/issues/21
             # T_velo_obj = np.array([[np.cos(theta), 0, -np.sin(theta), trans[0]],
             #                        [-np.sin(theta), 0, -np.cos(theta), trans[1]],
             #                        [0, 1, 0, trans[2] + size[2] / 2],
