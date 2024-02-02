@@ -201,7 +201,7 @@ class Optimizer(object):
             #       % (e, loss, sdf_loss, render_loss, rot_loss))
 
         end = get_time()
-        print("Reconstruction takes %f seconds" % (end - start))
+        # print("Reconstruction takes %f seconds" % (end - start))
         t_cam_obj = torch.inverse(t_obj_cam)
         return ForceKeyErrorDict(t_cam_obj=t_cam_obj.numpy(),
                                  pts_surface=pts_surface.cpu().numpy(),

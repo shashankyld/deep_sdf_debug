@@ -154,6 +154,7 @@ optimizer = Optimizer(decoder, configs)
 
 if args.sequence_dir == "data/P04/cleaned_data/000/000003/pcd.npy":
     # The detected car is being overtaken.
+    # args.sequence_dir == "data/P04/raw_data/000/000003/pcd.npy"
     gt = np.load("data/P04/gt/000/000003.npy",  allow_pickle=True).item()
 
 elif args.sequence_dir == "data/P04/cleaned_data/000/000009/pcd.npy":
@@ -257,7 +258,7 @@ for frame_id, dets in detections.items():
         continue
     objects_recon[frame_id] = obj
 end = get_time()
-print("Reconstructed %d objects in the scene, time elapsed: %f seconds" % (len(objects_recon), end - start))
+# print("Reconstructed %d objects in the scene, time elapsed: %f seconds" % (len(objects_recon), end - start))
 ############# Start reconstruction #############
 
 ############# Find first frames #############
@@ -309,11 +310,6 @@ gt_mtx = np.vstack((gt_mtx, np.array([0, 0, 0, 1])))
 prev_gt_mtx = gt_mtx
 vis.add_geometry(gt_line_set)
 ############# Ground truth #############
-############# Evaluation #############
-iou_gt_det = []
-iou_bbox = iou_3d(gt_bbox.iou, bbox.iou)
-iou_gt_det.append(iou_bbox)
-############# Evaluation #############
 
 
 t_velo = np.array([[-0, -1, -0, 0],
@@ -324,6 +320,7 @@ t_velo = np.array([[-0, -1, -0, 0],
 mesh_extractor = MeshExtractor(decoder, voxels_dim=64)
 
 
+############# Mesh #############
 mesh = mesh_extractor.extract_mesh_from_code(objects_recon[first_frame].code)
 mesh_o3d = o3d.geometry.TriangleMesh(o3d.utility.Vector3dVector(mesh.vertices), o3d.utility.Vector3iVector(mesh.faces))
 mesh_o3d.compute_vertex_normals()
@@ -333,14 +330,35 @@ mesh_o3d.transform(objects_recon[first_frame].t_cam_obj)
 mtx_opt = np.linalg.inv(t_velo) @ objects_recon[first_frame].t_cam_obj
 prev_mtx_opt = mtx_opt
 vis.add_geometry(mesh_o3d)
+############# Mesh #############
 
-#     bbox = mesh_o3d.get_oriented_bounding_box()
+############# Bbox of Mesh #############
+oriented_bbox_opt = mesh_o3d.get_oriented_bounding_box()
+oriented_bbox_opt_x =  oriented_bbox_opt.center[2]
+oriented_bbox_opt_y = -oriented_bbox_opt.center[0]
+oriented_bbox_opt_z = -oriented_bbox_opt.center[1]
+oriented_bbox_opt_l = oriented_bbox_opt.extent[0]
+oriented_bbox_opt_w = oriented_bbox_opt.extent[1]
+oriented_bbox_opt_h = oriented_bbox_opt.extent[2]
 
-#     # mtx = np.linalg.inv(t_velo) @ obj.t_cam_obj
+opt_line_bbox = BoundingBox3D(oriented_bbox_opt_x, 
+                    oriented_bbox_opt_y, oriented_bbox_opt_z,
+                    oriented_bbox_opt_l, oriented_bbox_opt_w, 
+                    oriented_bbox_opt_h, np.eye(3))
 
-#     bbox.color = np.array([0., 0., 255. / 255.])  # blue
-#     vis.add_geometry(bbox)
+opt_line_set, opt_box3d  = translate_boxes_to_open3d_instance(opt_line_bbox)
+opt_line_set.paint_uniform_color(np.array([0., 0., 255. / 255.]))  # blue
+vis.add_geometry(opt_line_set)
+############# Bbox of Mesh #############
 
+############# Evaluation #############
+iou_gt_det = []
+iou_gt_opt = []
+iou_bbox_det = iou_3d(gt_bbox.iou, bbox.iou)
+iou_bbox_opt = iou_3d(gt_bbox.iou, opt_line_bbox.iou)
+iou_gt_det.append(iou_bbox_det)
+iou_gt_opt.append(iou_bbox_opt)
+############# Evaluation #############
 
 # for frame_id, points_scan in points.items():
 for (frame_id,points_scan), (frame_id_recon,obj) in zip(instance.items(), objects_recon.items()):
@@ -390,13 +408,6 @@ for (frame_id,points_scan), (frame_id_recon,obj) in zip(instance.items(), object
     
         prev_gt_mtx = gt_mtx
         ############# Ground truth #############
-    
-        
-        ############# Evaluation #############
-        iou_bbox = iou_3d(gt_bbox.iou, bbox.iou)
-        iou_gt_det.append(iou_bbox)
-        ############# Evaluation #############
-    
 
         mesh = mesh_extractor.extract_mesh_from_code(obj.code)
         mesh_o3d.transform(np.linalg.inv(prev_mtx_opt)) # undo previous transformation
@@ -410,12 +421,44 @@ for (frame_id,points_scan), (frame_id_recon,obj) in zip(instance.items(), object
         mesh_o3d.transform(mtx_opt)
         vis.update_geometry(mesh_o3d)
 
+        ############# Bbox of Mesh #############
+        oriented_bbox_opt = mesh_o3d.get_oriented_bounding_box()
+        oriented_bbox_opt_x = oriented_bbox_opt.center[0]
+        oriented_bbox_opt_y = oriented_bbox_opt.center[1]
+        oriented_bbox_opt_z = oriented_bbox_opt.center[2]
+        oriented_bbox_opt_l = oriented_bbox_opt.extent[0]
+        oriented_bbox_opt_w = oriented_bbox_opt.extent[1]
+        oriented_bbox_opt_h = oriented_bbox_opt.extent[2]
+
+        opt_line_bbox = BoundingBox3D(oriented_bbox_opt_x, 
+                            oriented_bbox_opt_y, oriented_bbox_opt_z,
+                            oriented_bbox_opt_l, oriented_bbox_opt_w, 
+                            oriented_bbox_opt_h, np.eye(3))
+
+        opt_line_set.paint_uniform_color(np.array([0., 0., 255. / 255.]))  # blue
+        change_bbox(opt_line_set, opt_line_bbox)
+
+        # vis.add_geometry(opt_line_set)
+        opt_line_set.transform(np.linalg.inv(prev_mtx_opt))  # undo previous transformation
+        opt_line_set.transform(mtx_opt)
+        vis.update_geometry(opt_line_set)
+        prev_mtx_opt = mtx_opt
+        ############# Bbox of Mesh #############
+
+
+        ############# Evaluation #############
+        iou_bbox_det = iou_3d(gt_bbox.iou, bbox.iou)
+        iou_bbox_opt = iou_3d(gt_bbox.iou, opt_line_bbox.iou)
+        iou_gt_det.append(iou_bbox_det)
+        iou_gt_opt.append(iou_bbox_opt)
+        ############# Evaluation #############
 
         vis.poll_events()
         vis.update_renderer()
         time.sleep(0.1)
 
-print("mean iou", np.mean(iou_gt_det))
+print("mean iou_gt_det", np.mean(iou_gt_det))
+print("mean iou_gt_opt", np.mean(iou_gt_opt))
 # vis.run()
 vis.destroy_window()
 
