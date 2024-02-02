@@ -435,10 +435,9 @@ for (frame_id,points_scan), (frame_id_recon,obj) in zip(instance.items(), object
                             oriented_bbox_opt_l, oriented_bbox_opt_w, 
                             oriented_bbox_opt_h, np.eye(3))
 
-        opt_line_set.paint_uniform_color(np.array([0., 0., 255. / 255.]))  # blue
+        # opt_line_set.paint_uniform_color(np.array([0., 0., 255. / 255.]))  # blue
         change_bbox(opt_line_set, opt_line_bbox)
 
-        # vis.add_geometry(opt_line_set)
         opt_line_set.transform(np.linalg.inv(prev_mtx_opt))  # undo previous transformation
         opt_line_set.transform(mtx_opt)
         vis.update_geometry(opt_line_set)
@@ -457,8 +456,8 @@ for (frame_id,points_scan), (frame_id_recon,obj) in zip(instance.items(), object
         vis.update_renderer()
         time.sleep(0.1)
 
-print("mean iou_gt_det", np.mean(iou_gt_det))
-print("mean iou_gt_opt", np.mean(iou_gt_opt))
+print("Mean iou, Ground Truth vs Detection", np.mean(iou_gt_det))
+print("Mean iou, Ground Truth vs Optimization", np.mean(iou_gt_opt))
 # vis.run()
 vis.destroy_window()
 
