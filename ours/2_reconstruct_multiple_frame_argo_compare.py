@@ -15,15 +15,24 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>
 #
 
-import open3d as o3d
 import argparse
+import open3d as o3d
+from bbox import  BBox3D
+from bbox.metrics import iou_3d
+from dataclasses import dataclass, field
+from functools import partial
+from pathlib import Path
+import numpy as np
+import time
+from typing import Callable, List, Tuple
+from scipy.spatial.transform import Rotation as R
+
 from reconstruct.utils import color_table, set_view, get_configs, get_decoder, translate_boxes_to_open3d_instance
 from reconstruct.loss_utils import get_time
 from reconstruct.kitti_sequence import KITIISequence
 from reconstruct.argoverse2_sequence import Argoverse2Sequence
 from reconstruct.optimizer import Optimizer, MeshExtractor
-import numpy as np
-from scipy.spatial.transform import Rotation as R
+
 
 def config_parser():
     parser = argparse.ArgumentParser()
@@ -31,16 +40,6 @@ def config_parser():
     parser.add_argument('-d', '--sequence_dir', type=str, required=True, help='path to kitti sequence')
     # parser.add_argument('-i', '--frame_id', type=int, required=True, help='frame id')
     return parser
-
-from dataclasses import dataclass, field
-import open3d as o3d
-import numpy as np
-import time
-from pathlib import Path
-from bbox import  BBox3D
-from bbox.metrics import iou_3d
-from scipy.spatial.transform import Rotation as R
-
 
 @dataclass
 class BoundingBox3D:
@@ -127,8 +126,40 @@ def get_bbox_gt(pcd):
     bbox = BoundingBox3D(x,y,z,l,w,h,rot)
     return bbox
 
+# visualizer
+block_vis = True
+play_crun = False
 
 
+def quit(vis):
+    print("Destroying Visualizer")
+    vis.destroy_window()
+    os._exit(0)
+
+def next_frame(vis):
+    global block_vis
+    block_vis = not block_vis
+
+def start_stop(vis):
+    global play_crun
+    play_crun = not play_crun
+
+def register_key_callback(keys: List, callback: Callable):
+    for key in keys:
+        vis.register_key_callback(ord(str(key)), partial(callback))
+
+def register_key_callbacks():
+    register_key_callback(["Ā", "Q", "\x1b"], quit)
+    register_key_callback([" "], start_stop)
+    register_key_callback(["N"], next_frame)
+    # register_key_callback(["V"], toggle_view)
+    # register_key_callback(["C"], center_viewpoint)
+    # register_key_callback(["F"], toggle_source)
+    # register_key_callback(["K"], toggle_keypoints)
+    # register_key_callback(["M"], toggle_map)
+    # register_key_callback(["T"], toggle_trajectory)
+    # register_key_callback(["B"], set_black_background)
+    # register_key_callback(["W"], set_white_background)
 
 
 ###########################################################################################################
@@ -267,7 +298,8 @@ for k, _ in objects_recon.items():
 
 
 # Visualize results
-vis = o3d.visualization.Visualizer()
+vis = o3d.visualization.VisualizerWithKeyCallback()
+register_key_callbacks()
 vis.create_window()
 # Coordinate frame
 axis_pcd = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0, origin=[0, 0, 0])
@@ -446,9 +478,16 @@ for (frame_id,points_scan), (frame_id_recon,obj) in zip(instance.items(), object
         iou_gt_opt.append(iou_bbox_opt)
         ############# Evaluation #############
 
-        vis.poll_events()
-        vis.update_renderer()
-        time.sleep(0.1)
+        while block_vis:
+            vis.poll_events()
+            vis.update_renderer()
+            if play_crun:
+                break
+        block_vis = not block_vis
+
+        # vis.poll_events()
+        # vis.update_renderer()
+        # time.sleep(0.1)
 
 print("Mean iou, Ground Truth vs Detection", np.mean(iou_gt_det))
 print("Mean iou, Ground Truth vs Optimization", np.mean(iou_gt_opt))

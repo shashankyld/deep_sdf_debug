@@ -59,7 +59,8 @@ python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config
 python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config_kitti.json --sequence_dir data/P04/cleaned_data/001/001039/pcd.npy
 
 # direction still wrong
-# pause next frame code motion
+# boundling bokx wrong
+# code motion
 # inconsidtent over time and no using for data of mulitple frame
 # ablation first frame vs multiple frame
 # methodology tracking optimization, kiss icp pv-rcnn deepsdf
