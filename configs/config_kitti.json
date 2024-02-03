@@ -31,7 +31,7 @@
       "b2": 0.025,
       "num_iterations": 10,
       "learning_rate": 1.0,
-      "scale_damping": 1.0
+      "scale_damping": 100.0
     },
     "pose_only_optim": {
       "num_iterations": 5,

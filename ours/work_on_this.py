@@ -60,7 +60,10 @@ class BoundingBox3D:
         r = R.from_matrix(self.rot)
         q8d_xyzw = r.as_quat()
         euler = r.as_euler('zxy', degrees=True)
+        print("self.rot", self.rot)
+        print("euler", euler)
         q8d = np.array([q8d_xyzw[3], q8d_xyzw[0], q8d_xyzw[1], q8d_xyzw[2]])
+        print("q8d", q8d)
         self.iou: BBox3D = BBox3D(self.x, self.y, self.z, 
                                          self.length, self.width, 
                                          self.height, q=q8d)
@@ -368,7 +371,7 @@ for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.ite
                                                                         [gt[first_frame][track_uuid]['z']]])))
         gt_mtx = np.vstack((gt_mtx, np.array([0, 0, 0, 1])))
         prev_gt_mtx = gt_mtx
-        vis.add_geometry(gt_line_set)
+        # vis.add_geometry(gt_line_set)
         ############# Ground truth #############
 
 
@@ -389,9 +392,29 @@ for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.ite
                 oriented_bbox_opt.extent)
         obb.rotate(mtx_opt[:3, :3])
         obb.translate(mtx_opt[:3, 3])
-        obb.color = np.array(color_table[2])
+        obb.color = np.array(color_table[3])
         vis.add_geometry(obb)
 
+        # print("objects_recon[first_frame].t_cam_obj", objects_recon[first_frame].t_cam_obj)
+        # # T_velo_obj = T_velo_obj[:, [1, 2, 0, 3]]
+        # # mtx_opt_tmp = (mtx_opt[:, [2, 0, 1, 3]][:3, :3] *-1).T
+
+        # opt_line_bbox = BoundingBox3D(mtx_opt[:3, 3][0], 
+        #                     mtx_opt[:3, 3][1], mtx_opt[:3, 3][2],
+        #                     oriented_bbox_opt.extent[0], oriented_bbox_opt.extent[1], 
+        #                     oriented_bbox_opt.extent[2], (mtx_opt @ t_velo)[:3, :3] *-1)
+
+        # print("frame_id", frame_id)
+        # print("gt_mtx", gt_mtx)
+        # print("mtx_opt", mtx_opt)
+        # # print("iou_3d(gt_bbox.iou, bbox.iou)", iou_3d(gt_bbox.iou, bbox.iou))
+        # print("iou_3d(gt_bbox.iou, opt_line_bbox.iou)", iou_3d(gt_bbox.iou, opt_line_bbox.iou))
+
+        # opt_line_set, opt_box3d  = translate_boxes_to_open3d_instance(opt_line_bbox)
+        # opt_line_set.paint_uniform_color(color_table[2])  # blue
+        # # opt_box3d.color = np.array(color_table[3])
+        # # vis.add_geometry(opt_box3d)
+        # vis.add_geometry(opt_line_set)
         ############# Bbox of Mesh #############
 
         mesh_o3d.transform(mtx_opt)
@@ -461,9 +484,25 @@ for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.ite
         obb.extent = oriented_bbox_opt.extent
         obb.rotate(mtx_opt[:3, :3])
         obb.translate(mtx_opt[:3, 3])
-        obb.color = np.array(color_table[2])
+        obb.color = np.array(color_table[3])
         vis.update_geometry(obb)
 
+        # opt_line_bbox = BoundingBox3D(mtx_opt[:3, 3][0], 
+        #                     mtx_opt[:3, 3][1], mtx_opt[:3, 3][2],
+        #                     oriented_bbox_opt.extent[0], oriented_bbox_opt.extent[1], 
+        #                     oriented_bbox_opt.extent[2], (mtx_opt @ t_velo)[:3, :3] *-1)
+
+        # print("frame_id", frame_id)
+        # print("gt_mtx", gt_mtx)
+        # print("mtx_opt", mtx_opt)
+        # # print("iou_3d(gt_bbox.iou, bbox.iou)", iou_3d(gt_bbox.iou, bbox.iou))
+        # print("iou_3d(gt_bbox.iou, opt_line_bbox.iou)", iou_3d(gt_bbox.iou, opt_line_bbox.iou))
+        # change_bbox(opt_line_set, opt_line_bbox)
+        # opt_line_set.paint_uniform_color(color_table[2])  # blue
+
+        # opt_line_set.transform(np.linalg.inv(prev_mtx_opt))  # undo previous transformation
+        # opt_line_set.transform(mtx_opt)
+        # vis.update_geometry(opt_line_set)
         ############# Bbox of Mesh #############
 
         mesh_o3d.transform(mtx_opt)
@@ -485,7 +524,7 @@ for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.ite
         if play_crun:
             break
     block_vis = not block_vis
-# 
-print("Mean iou, Ground Truth vs Detection", np.mean(iou_gt_det))
+
+# print("Mean iou, Ground Truth vs Detection", np.mean(iou_gt_det))
 # print("Mean iou, Ground Truth vs Optimization", np.mean(iou_gt_opt))
 vis.destroy_window()
