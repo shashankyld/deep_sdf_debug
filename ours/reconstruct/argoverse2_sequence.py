@@ -296,19 +296,11 @@ class Argoverse2Sequence:
 
     def load_calib(self):
         """Load and compute intrinsic and extrinsic calibration parameters."""
-        # # Load the calibration file
-        # filedata = read_calib_file(self.calib_file)
-
-        # # Load projection matrix P_cam2_cam0, and compute perspective instrinsics K of cam2
-        # P_cam2_cam0 = np.reshape(filedata['P2'], (3, 4))
-        # self.K_cam = P_cam2_cam0[0:3, 0:3].astype(np.float32)
-        # self.invK_cam = np.linalg.inv(self.K_cam).astype(np.float32)
-
-        # # Load the transfomration from T_cam0_velo, and compute the transformation T_cam2_velo
-        # T_cam0_velo, T_cam2_cam0 = np.eye(4), np.eye(4)
-        # T_cam0_velo[:3, :] = np.reshape(filedata['Tr'], (3, 4))
-        # T_cam2_cam0[0, 3] = P_cam2_cam0[0, 3] / P_cam2_cam0[0, 0]
-        # self.T_cam_velo = T_cam2_cam0.dot(T_cam0_velo).astype(np.float32)
+        '''
+        Transformation from velodyne to camera frame,
+        X Y Z of velodyne frame are Z -X -Y respectively in Camera Frame. 
+        This camera frame is imaginary.
+        '''
         t_velo = np.array([[-0, -1, -0, 0],
                             [-0,  0, -1, -0],
                             [ 1, -0, -0, -0],
