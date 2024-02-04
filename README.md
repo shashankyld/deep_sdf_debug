@@ -57,8 +57,7 @@ python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config
 
 python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config_kitti.json --sequence_dir data/P04/cleaned_data/001/001039/pcd.npy
 
-# direction still wrong
-# bounding box of opt for evaluation is wrong
+# iou_3d evaluation
 # try scale damping = 100
 # code motion
 # inconsidtent over time and no using for data of mulitple frame
