@@ -133,7 +133,7 @@ def get_bbox_gt(pcd):
 
 # visualizer
 block_vis = True
-play_crun = False
+play_crun = True
 
 
 def quit(vis):
@@ -439,12 +439,12 @@ for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.ite
 
 
         t_velo_obj = convert_to_lidar_cs(objects_recon[first_frame].t_cam_obj, 1)
-        # print("t_velo_obj", t_velo_obj)
-        # print("objects_recon[first_frame].size", objects_recon[first_frame].size)
+        scale = np.sqrt(t_velo_obj[0, 0]**2 + t_velo_obj[1, 0]**2 + t_velo_obj[2, 0]**2)
+        print("scale", scale)
         opt_line_bbox = BoundingBox3D(t_velo_obj[:3, 3][0], 
                             t_velo_obj[:3, 3][1], t_velo_obj[:3, 3][2],
-                            2 * oriented_bbox_opt.extent[0], 2 * oriented_bbox_opt.extent[1], 
-                            2 * oriented_bbox_opt.extent[2], t_velo_obj[:3, :3] / (oriented_bbox_opt.extent[0]))
+                            scale * oriented_bbox_opt.extent[0], scale * oriented_bbox_opt.extent[1], 
+                            scale * oriented_bbox_opt.extent[2], t_velo_obj[:3, :3] / scale)
 
         opt_line_set, opt_box3d  = translate_boxes_to_open3d_instance(opt_line_bbox)
         opt_line_set.paint_uniform_color(color_table[2])  # blue
@@ -527,12 +527,13 @@ for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.ite
 
 
         t_velo_obj = convert_to_lidar_cs(obj.t_cam_obj, 1)
-        # print("t_velo_obj", t_velo_obj)
+        scale = np.sqrt(t_velo_obj[0, 0]**2 + t_velo_obj[1, 0]**2 + t_velo_obj[2, 0]**2)
+        print("scale", scale)
         # print("obj.t_cam_obj.size", obj.t_cam_obj.size)
         opt_line_bbox = BoundingBox3D(t_velo_obj[:3, 3][0], 
                             t_velo_obj[:3, 3][1], t_velo_obj[:3, 3][2],
-                            2 * oriented_bbox_opt.extent[0], 2 * oriented_bbox_opt.extent[1], 
-                            2 * oriented_bbox_opt.extent[2], t_velo_obj[:3, :3] / (oriented_bbox_opt.extent[0]))
+                            scale * oriented_bbox_opt.extent[0], scale * oriented_bbox_opt.extent[1], 
+                            scale * oriented_bbox_opt.extent[2], t_velo_obj[:3, :3] / scale)
         change_bbox(opt_line_set, opt_line_bbox)
         opt_line_set.paint_uniform_color(color_table[2])  # blue
 
