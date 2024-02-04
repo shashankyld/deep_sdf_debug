@@ -23,6 +23,7 @@ from reconstruct.loss_utils import get_rays, get_time
 from reconstruct.utils import ForceKeyErrorDict, read_calib_file, load_velo_scan, load_velo_scan_argoverse2
 from reconstruct import get_detectors
 from pathlib import Path
+from scipy.spatial.transform import Rotation as R
 
 class FrameWithLiDAR:
     def __init__(self, sequence, frame_id):
@@ -137,7 +138,13 @@ class FrameWithLiDAR:
         for i in range(1):
             # det_3d = detections_3d[n, :]
             
-            trans, size, theta = det['bbox'][:3], det['bbox'][3:6], det['bbox'][6]
+            r = R.from_matrix(det['T_cam_obj'][:3, :3])
+            euler = r.as_euler('zxy')[0]
+            # print("self.frame_id", self.frame_id)
+            # print("euler", np.rad2deg(euler))
+
+            trans, size, theta = det['bbox'][:3], det['bbox'][3:6], euler
+
             theta = theta * -1 + np.deg2rad(90)
             # Get SE(3) transformation matrix from trans and theta
             # https://github.com/JingwenWang95/DSP-SLAM/issues/21

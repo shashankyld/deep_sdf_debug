@@ -206,7 +206,7 @@ elif args.sequence_dir == "data/P04/cleaned_data/000/000030/pcd.npy":
     gt = np.load("data/P04/gt/000/000030.npy",  allow_pickle=True).item()
     
 elif args.sequence_dir == "data/P04/cleaned_data/000/000049/pcd.npy":
-    # The ego-car is being overtaken
+    # The ego-car is being overtaken -> change to this car goes straight.
     gt = np.load("data/P04/gt/000/000049.npy",  allow_pickle=True).item()
 
 elif args.sequence_dir == "data/P04/cleaned_data/001/001000/pcd.npy":
@@ -280,8 +280,10 @@ objects_recon = {}
 start = get_time()
 for frame_id, dets in detections.items():
     det = dets[0]
-    # print("det.T_cam_obj", det.T_cam_obj)
+    print("frame_id\n", frame_id)
+    print("det.T_cam_obj\n", det.T_cam_obj)
     obj = optimizer.reconstruct_object(det.T_cam_obj, det.surface_points)
+    print("obj.t_cam_obj\n", obj.t_cam_obj)
     # in case reconstruction fails
     if obj.code is None:
         continue
@@ -336,6 +338,8 @@ t_velo = np.array([[-0, -1, -0, 0],
 mesh_extractor = MeshExtractor(decoder, voxels_dim=64)
 
 for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.items()):
+    print("frame_id\n", frame_id)
+    print("obj.t_cam_obj\n", obj.t_cam_obj)
 
     if frame_id == first_frame:
 
@@ -389,9 +393,37 @@ for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.ite
                 oriented_bbox_opt.extent)
         obb.rotate(mtx_opt[:3, :3])
         obb.translate(mtx_opt[:3, 3])
-        obb.color = np.array(color_table[2])
+        obb.color = np.array(color_table[3])
         vis.add_geometry(obb)
 
+        # # print("objects_recon[first_frame].t_cam_obj", objects_recon[first_frame].t_cam_obj)
+        # # T_velo_obj = T_velo_obj[:, [1, 2, 0, 3]]
+        # mtx_opt_tmp = mtx_opt[:, [0, 2, 1, 3]][:3, :3]
+        # mtx_opt_tmp[1, 0] = -mtx_opt_tmp[1, 0]
+        # mtx_opt_tmp[1, 2] = -mtx_opt_tmp[1, 2]
+        # print("mtx_opt", mtx_opt)
+        # print("mtx_opt_tmp", mtx_opt_tmp)
+        # r = R.from_matrix(mtx_opt_tmp)
+        # # q8d_xyzw = r.as_quat()
+        # euler = r.as_euler('zxy', degrees=True)
+        # print("euler", euler)
+
+        # opt_line_bbox = BoundingBox3D(mtx_opt[:3, 3][0], 
+        #                     mtx_opt[:3, 3][1], mtx_opt[:3, 3][2],
+        #                     oriented_bbox_opt.extent[0], oriented_bbox_opt.extent[1], 
+        #                     oriented_bbox_opt.extent[2], (mtx_opt @ t_velo)[:3, :3] *-1)
+
+        # print("frame_id", frame_id)
+        # print("gt_mtx", gt_mtx)
+        # print("mtx_opt", mtx_opt)
+        # # print("iou_3d(gt_bbox.iou, bbox.iou)", iou_3d(gt_bbox.iou, bbox.iou))
+        # print("iou_3d(gt_bbox.iou, opt_line_bbox.iou)", iou_3d(gt_bbox.iou, opt_line_bbox.iou))
+
+        # opt_line_set, opt_box3d  = translate_boxes_to_open3d_instance(opt_line_bbox)
+        # opt_line_set.paint_uniform_color(color_table[2])  # blue
+        # # opt_box3d.color = np.array(color_table[3])
+        # # vis.add_geometry(opt_box3d)
+        # vis.add_geometry(opt_line_set)
         ############# Bbox of Mesh #############
 
         mesh_o3d.transform(mtx_opt)
@@ -461,9 +493,25 @@ for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.ite
         obb.extent = oriented_bbox_opt.extent
         obb.rotate(mtx_opt[:3, :3])
         obb.translate(mtx_opt[:3, 3])
-        obb.color = np.array(color_table[2])
+        obb.color = np.array(color_table[3])
         vis.update_geometry(obb)
 
+        # opt_line_bbox = BoundingBox3D(mtx_opt[:3, 3][0], 
+        #                     mtx_opt[:3, 3][1], mtx_opt[:3, 3][2],
+        #                     oriented_bbox_opt.extent[0], oriented_bbox_opt.extent[1], 
+        #                     oriented_bbox_opt.extent[2], (mtx_opt @ t_velo)[:3, :3] *-1)
+
+        # print("frame_id", frame_id)
+        # print("gt_mtx", gt_mtx)
+        # print("mtx_opt", mtx_opt)
+        # # print("iou_3d(gt_bbox.iou, bbox.iou)", iou_3d(gt_bbox.iou, bbox.iou))
+        # print("iou_3d(gt_bbox.iou, opt_line_bbox.iou)", iou_3d(gt_bbox.iou, opt_line_bbox.iou))
+        # change_bbox(opt_line_set, opt_line_bbox)
+        # opt_line_set.paint_uniform_color(color_table[2])  # blue
+
+        # opt_line_set.transform(np.linalg.inv(prev_mtx_opt))  # undo previous transformation
+        # opt_line_set.transform(mtx_opt)
+        # vis.update_geometry(opt_line_set)
         ############# Bbox of Mesh #############
 
         mesh_o3d.transform(mtx_opt)
@@ -485,7 +533,7 @@ for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.ite
         if play_crun:
             break
     block_vis = not block_vis
-# 
-print("Mean iou, Ground Truth vs Detection", np.mean(iou_gt_det))
+
+# print("Mean iou, Ground Truth vs Detection", np.mean(iou_gt_det))
 # print("Mean iou, Ground Truth vs Optimization", np.mean(iou_gt_opt))
 vis.destroy_window()
