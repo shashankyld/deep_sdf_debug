@@ -139,6 +139,7 @@ class FrameWithLiDAR:
             # det_3d = detections_3d[n, :]
             
             r = R.from_matrix(det['T_cam_obj'][:3, :3])
+            # pv_rcnn_debug = det['T_cam_obj'] # debug
             euler = r.as_euler('zxy')[0]
             # print("self.frame_id", self.frame_id)
             # print("euler", np.rad2deg(euler))
@@ -199,6 +200,8 @@ class FrameWithLiDAR:
             # Initialize detected instance
             instance = ForceKeyErrorDict()
             instance.T_cam_obj = T_cam_obj
+            # instance.pv_rcnn_debug = pv_rcnn_debug # debug
+            # instance.size = size # debug
             # instance.scale = size 
             instance.surface_points = pts_surface_cam.astype(np.float32)
             instance.num_surface_points = pts_surface_cam.shape[0]

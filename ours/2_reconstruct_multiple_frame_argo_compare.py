@@ -19,6 +19,7 @@ import argparse
 import open3d as o3d
 from bbox import  BBox3D
 from bbox.metrics import iou_3d
+import copy
 from dataclasses import dataclass, field
 from functools import partial
 import os
@@ -60,7 +61,9 @@ class BoundingBox3D:
         r = R.from_matrix(self.rot)
         q8d_xyzw = r.as_quat()
         euler = r.as_euler('zxy', degrees=True)
+        # print("euler", euler)
         q8d = np.array([q8d_xyzw[3], q8d_xyzw[0], q8d_xyzw[1], q8d_xyzw[2]])
+        # print("q8d", q8d)
         self.iou: BBox3D = BBox3D(self.x, self.y, self.z, 
                                          self.length, self.width, 
                                          self.height, q=q8d)
@@ -164,6 +167,31 @@ def register_key_callbacks():
     # register_key_callback(["W"], set_white_background)
 
 
+def convert_to_lidar_cs(T_cam_obj_copy, length):
+    # Magic number
+    T_cam_obj = copy.deepcopy(T_cam_obj_copy)
+    x_rad = np.deg2rad(-90)
+    rot_x = np.array([[1, 0, 0], 
+                        [0, np.cos(x_rad), -np.sin(x_rad)], 
+                        [0, np.sin(x_rad), np.cos(x_rad)]])
+
+    z_rad = np.deg2rad(90)
+    rot_z = np.array([  [np.cos(z_rad), -np.sin(z_rad), 0], 
+                        [np.sin(z_rad),  np.cos(z_rad), 0], 
+                        [0       ,         0, 1]])
+    rot_velo_obj = rot_x @ rot_z 
+
+
+    t_velo = np.array([[-0, -1, -0, 0],
+                        [-0,  0, -1, -0],
+                        [ 1, -0, -0, -0],
+                        [ 0,  0,  0,  1]])
+
+    T_cam_obj[:3, :3] = T_cam_obj[:3, :3] / length
+    T_velo_obj = np.linalg.inv(t_velo) @ T_cam_obj
+    T_velo_obj[:3, :3] = T_velo_obj[:3, :3] @ rot_velo_obj
+
+    return T_velo_obj
 ###########################################################################################################
 ###########################################################################################################
 ###########################################################################################################
@@ -250,6 +278,24 @@ else:
 pcd_track_uuids = np.load(args.sequence_dir,  allow_pickle=True).item()
 
 
+# Magic number
+x_rad = np.deg2rad(-90)
+rot_x = np.array([[1, 0, 0], 
+                    [0, np.cos(x_rad), -np.sin(x_rad)], 
+                    [0, np.sin(x_rad), np.cos(x_rad)]])
+
+z_rad = np.deg2rad(90)
+rot_z = np.array([  [np.cos(z_rad), -np.sin(z_rad), 0], 
+                    [np.sin(z_rad),  np.cos(z_rad), 0], 
+                    [0       ,         0, 1]])
+rot_velo_obj = rot_x @ rot_z 
+
+
+t_velo = np.array([[-0, -1, -0, 0],
+                    [-0,  0, -1, -0],
+                    [ 1, -0, -0, -0],
+                    [ 0,  0,  0,  1]])
+
 ############# Find track_uuids #############
 for k, _ in pcd_track_uuids.items():
     track_uuid = k
@@ -278,12 +324,25 @@ print("len(detections)", len(detections))
 ############# Start reconstruction #############
 objects_recon = {}
 start = get_time()
+t_velo = np.array([[-0, -1, -0, 0],
+                    [-0,  0, -1, -0],
+                    [ 1, -0, -0, -0],
+                    [ 0,  0,  0,  1]])
+
 for frame_id, dets in detections.items():
     det = dets[0]
-    print("frame_id\n", frame_id)
-    print("det.T_cam_obj\n", det.T_cam_obj)
+
+    # r = R.from_matrix(det.pv_rcnn_debug[:3, :3])
+    # euler_pv_rcnn_debug = r.as_euler('zxy', degrees=True)
+    # print("euler_pv_rcnn_debug\n", euler_pv_rcnn_debug)
+
+    # T_velo_obj = convert_to_lidar_cs(det.T_cam_obj, det.l)
+    # r_t = R.from_matrix(T_velo_obj[:3, :3])
+    # euler_T_velo_obj = r_t.as_euler('zxy', degrees=True)
+    # print("euler_T_velo_obj\n", euler_T_velo_obj)
+
     obj = optimizer.reconstruct_object(det.T_cam_obj, det.surface_points)
-    print("obj.t_cam_obj\n", obj.t_cam_obj)
+    # obj.size = det.size
     # in case reconstruction fails
     if obj.code is None:
         continue
@@ -316,31 +375,12 @@ pts_str = 'pts_cam' # dict_keys(['T_cam_obj', 'pts_cam', 'surface_points', 'bbox
 iou_gt_det = []
 iou_gt_opt = []
 ############# Evaluation #############
-
-
-x_rad = np.deg2rad(-90)
-rot_x = np.array([[1, 0, 0], 
-                    [0, np.cos(x_rad), -np.sin(x_rad)], 
-                    [0, np.sin(x_rad), np.cos(x_rad)]])
-
-z_rad = np.deg2rad(90)
-rot_z = np.array([  [np.cos(z_rad), -np.sin(z_rad), 0], 
-                    [np.sin(z_rad),  np.cos(z_rad), 0], 
-                    [0       ,         0, 1]])
-rot_velo_obj = rot_x @ rot_z 
-
-
-t_velo = np.array([[-0, -1, -0, 0],
-                    [-0,  0, -1, -0],
-                    [ 1, -0, -0, -0],
-                    [ 0,  0,  0,  1]])
                     
 mesh_extractor = MeshExtractor(decoder, voxels_dim=64)
 
 for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.items()):
-    print("frame_id\n", frame_id)
-    print("obj.t_cam_obj\n", obj.t_cam_obj)
 
+    print("frame_id\n", frame_id)
     if frame_id == first_frame:
 
         ############# Bounding boxes #############
@@ -387,43 +427,30 @@ for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.ite
 
         ############# Bbox of Mesh #############
         oriented_bbox_opt = mesh_o3d.get_oriented_bounding_box()
-        obb = o3d.geometry.OrientedBoundingBox(
-                [0, 0, 0], 
-                rot_velo_obj,
-                oriented_bbox_opt.extent)
-        obb.rotate(mtx_opt[:3, :3])
-        obb.translate(mtx_opt[:3, 3])
-        obb.color = np.array(color_table[3])
-        vis.add_geometry(obb)
+        # print("oriented_bbox_opt.extent", oriented_bbox_opt.extent)
+        # obb = o3d.geometry.OrientedBoundingBox(
+        #         [0, 0, 0], 
+        #         rot_velo_obj,
+        #         oriented_bbox_opt.extent)
+        # obb.rotate(mtx_opt[:3, :3])
+        # obb.translate(mtx_opt[:3, 3])
+        # obb.color = np.array(color_table[3])
+        # vis.add_geometry(obb)
 
-        # # print("objects_recon[first_frame].t_cam_obj", objects_recon[first_frame].t_cam_obj)
-        # # T_velo_obj = T_velo_obj[:, [1, 2, 0, 3]]
-        # mtx_opt_tmp = mtx_opt[:, [0, 2, 1, 3]][:3, :3]
-        # mtx_opt_tmp[1, 0] = -mtx_opt_tmp[1, 0]
-        # mtx_opt_tmp[1, 2] = -mtx_opt_tmp[1, 2]
-        # print("mtx_opt", mtx_opt)
-        # print("mtx_opt_tmp", mtx_opt_tmp)
-        # r = R.from_matrix(mtx_opt_tmp)
-        # # q8d_xyzw = r.as_quat()
-        # euler = r.as_euler('zxy', degrees=True)
-        # print("euler", euler)
 
-        # opt_line_bbox = BoundingBox3D(mtx_opt[:3, 3][0], 
-        #                     mtx_opt[:3, 3][1], mtx_opt[:3, 3][2],
-        #                     oriented_bbox_opt.extent[0], oriented_bbox_opt.extent[1], 
-        #                     oriented_bbox_opt.extent[2], (mtx_opt @ t_velo)[:3, :3] *-1)
+        t_velo_obj = convert_to_lidar_cs(objects_recon[first_frame].t_cam_obj, 1)
+        # print("t_velo_obj", t_velo_obj)
+        # print("objects_recon[first_frame].size", objects_recon[first_frame].size)
+        opt_line_bbox = BoundingBox3D(t_velo_obj[:3, 3][0], 
+                            t_velo_obj[:3, 3][1], t_velo_obj[:3, 3][2],
+                            2 * oriented_bbox_opt.extent[0], 2 * oriented_bbox_opt.extent[1], 
+                            2 * oriented_bbox_opt.extent[2], t_velo_obj[:3, :3] / (oriented_bbox_opt.extent[0]))
 
-        # print("frame_id", frame_id)
-        # print("gt_mtx", gt_mtx)
-        # print("mtx_opt", mtx_opt)
-        # # print("iou_3d(gt_bbox.iou, bbox.iou)", iou_3d(gt_bbox.iou, bbox.iou))
-        # print("iou_3d(gt_bbox.iou, opt_line_bbox.iou)", iou_3d(gt_bbox.iou, opt_line_bbox.iou))
+        opt_line_set, opt_box3d  = translate_boxes_to_open3d_instance(opt_line_bbox)
+        opt_line_set.paint_uniform_color(color_table[2])  # blue
+        vis.add_geometry(opt_line_set)
 
-        # opt_line_set, opt_box3d  = translate_boxes_to_open3d_instance(opt_line_bbox)
-        # opt_line_set.paint_uniform_color(color_table[2])  # blue
-        # # opt_box3d.color = np.array(color_table[3])
-        # # vis.add_geometry(opt_box3d)
-        # vis.add_geometry(opt_line_set)
+
         ############# Bbox of Mesh #############
 
         mesh_o3d.transform(mtx_opt)
@@ -486,32 +513,33 @@ for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.ite
         mtx_opt = np.linalg.inv(t_velo) @ obj.t_cam_obj
         
         ############# Bbox of Mesh #############
-        obb.translate(np.linalg.inv(prev_mtx_opt)[:3, 3]) # undo previous transformation
-        obb.rotate(np.linalg.inv(prev_mtx_opt)[:3, :3])
+        # obb.translate(np.linalg.inv(prev_mtx_opt)[:3, 3]) # undo previous transformation
+        # obb.rotate(np.linalg.inv(prev_mtx_opt)[:3, :3])
         oriented_bbox_opt = mesh_o3d.get_oriented_bounding_box()
-        obb.center = np.array([0, 0, 0])
-        obb.extent = oriented_bbox_opt.extent
-        obb.rotate(mtx_opt[:3, :3])
-        obb.translate(mtx_opt[:3, 3])
-        obb.color = np.array(color_table[3])
-        vis.update_geometry(obb)
+        # print("oriented_bbox_opt.extent", oriented_bbox_opt.extent)
+        # obb.center = np.array([0, 0, 0])
+        # obb.extent = oriented_bbox_opt.extent
+        # obb.rotate(mtx_opt[:3, :3])
+        # obb.translate(mtx_opt[:3, 3])
+        # obb.color = np.array(color_table[3])
+        # vis.update_geometry(obb)
 
-        # opt_line_bbox = BoundingBox3D(mtx_opt[:3, 3][0], 
-        #                     mtx_opt[:3, 3][1], mtx_opt[:3, 3][2],
-        #                     oriented_bbox_opt.extent[0], oriented_bbox_opt.extent[1], 
-        #                     oriented_bbox_opt.extent[2], (mtx_opt @ t_velo)[:3, :3] *-1)
 
-        # print("frame_id", frame_id)
-        # print("gt_mtx", gt_mtx)
-        # print("mtx_opt", mtx_opt)
-        # # print("iou_3d(gt_bbox.iou, bbox.iou)", iou_3d(gt_bbox.iou, bbox.iou))
-        # print("iou_3d(gt_bbox.iou, opt_line_bbox.iou)", iou_3d(gt_bbox.iou, opt_line_bbox.iou))
-        # change_bbox(opt_line_set, opt_line_bbox)
-        # opt_line_set.paint_uniform_color(color_table[2])  # blue
 
-        # opt_line_set.transform(np.linalg.inv(prev_mtx_opt))  # undo previous transformation
-        # opt_line_set.transform(mtx_opt)
-        # vis.update_geometry(opt_line_set)
+        t_velo_obj = convert_to_lidar_cs(obj.t_cam_obj, 1)
+        # print("t_velo_obj", t_velo_obj)
+        # print("obj.t_cam_obj.size", obj.t_cam_obj.size)
+        opt_line_bbox = BoundingBox3D(t_velo_obj[:3, 3][0], 
+                            t_velo_obj[:3, 3][1], t_velo_obj[:3, 3][2],
+                            2 * oriented_bbox_opt.extent[0], 2 * oriented_bbox_opt.extent[1], 
+                            2 * oriented_bbox_opt.extent[2], t_velo_obj[:3, :3] / (oriented_bbox_opt.extent[0]))
+        change_bbox(opt_line_set, opt_line_bbox)
+        opt_line_set.paint_uniform_color(color_table[2])  # blue
+
+        opt_line_set.transform(np.linalg.inv(prev_mtx_opt))  # undo previous transformation
+        opt_line_set.transform(mtx_opt)
+        vis.update_geometry(opt_line_set)
+
         ############# Bbox of Mesh #############
 
         mesh_o3d.transform(mtx_opt)
@@ -522,9 +550,11 @@ for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.ite
 
     ############# Evaluation #############
     iou_bbox_det = iou_3d(gt_bbox.iou, bbox.iou)
-    # iou_bbox_opt = iou_3d(gt_bbox.iou, opt_line_bbox.iou)
+    iou_bbox_opt = iou_3d(gt_bbox.iou, opt_line_bbox.iou)
+    # print("bbox, opt_line_bbox(For evaluate Visualization, ignored)", iou_3d(bbox.iou, opt_line_bbox.iou))
+    print("IOU detection, optimization(Should be better)", iou_bbox_det, iou_bbox_opt)
     iou_gt_det.append(iou_bbox_det)
-    # iou_gt_opt.append(iou_bbox_opt)
+    iou_gt_opt.append(iou_bbox_opt)
     ############# Evaluation #############
 
     while block_vis:
@@ -534,6 +564,6 @@ for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.ite
             break
     block_vis = not block_vis
 
-# print("Mean iou, Ground Truth vs Detection", np.mean(iou_gt_det))
-# print("Mean iou, Ground Truth vs Optimization", np.mean(iou_gt_opt))
+print("Mean iou, Ground Truth vs Detection", np.mean(iou_gt_det))
+print("Mean iou, Ground Truth vs Optimization", np.mean(iou_gt_opt))
 vis.destroy_window()
