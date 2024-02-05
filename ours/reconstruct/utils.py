@@ -15,12 +15,19 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>
 #
 
-import torch
-import numpy as np
-import json
 from addict import Dict
+import argparse
+from bbox import  BBox3D
+import copy
+from dataclasses import dataclass, field
+import json
+import numpy as np
+import open3d as o3d
 import plyfile
+from scipy.spatial.transform import Rotation as R
 import skimage.measure as measure
+import torch
+
 from deep_sdf.workspace import config_decoder
 
 # colors used for visualization
@@ -168,6 +175,8 @@ def write_mesh_to_ply(v, f, ply_filename_out):
     ply_data = plyfile.PlyData([el_verts, el_faces])
     ply_data.write(ply_filename_out)
 
+
+
 def translate_boxes_to_open3d_instance(bbox, crop=False):
     """
           4 -------- 6
@@ -195,3 +204,95 @@ def translate_boxes_to_open3d_instance(bbox, crop=False):
     
 
     return line_set, box3d
+
+def config_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-c', '--config', type=str, required=True, help='path to config file')
+    parser.add_argument('-d', '--sequence_dir', type=str, required=True, help='path to kitti sequence')
+    return parser
+
+
+@dataclass
+class BoundingBox3D:
+    '''
+    pose in s-frame
+    '''
+    x: float
+    y: float
+    z: float
+    length: float
+    width: float
+    height: float
+    rot: float
+    iou: BBox3D = field(init=False, repr=False)
+
+    def __post_init__(self):
+        r = R.from_matrix(self.rot)
+        q8d_xyzw = r.as_quat()
+        euler = r.as_euler('zxy', degrees=True)
+        q8d = np.array([q8d_xyzw[3], q8d_xyzw[0], q8d_xyzw[1], q8d_xyzw[2]])
+        self.iou: BBox3D = BBox3D(self.x, self.y, self.z, 
+                                         self.length, self.width, 
+                                         self.height, q=q8d)
+                                
+
+
+def change_bbox(line_set, bbox):
+    center = [bbox.x, bbox.y, bbox.z]
+    lwh = [bbox.length, bbox.width, bbox.height]
+    box3d = o3d.geometry.OrientedBoundingBox(center, bbox.rot, lwh)
+        
+    line_set = o3d.geometry.LineSet.create_from_oriented_bounding_box(box3d)
+    lines = np.asarray(line_set.lines)
+    lines = np.concatenate([lines, np.array([[1, 4], [7, 6]])], axis=0)
+
+    line_set.lines = o3d.utility.Vector2iVector(lines)
+
+def get_bbox(pcd):
+    x = pcd['bbox'][0]
+    y = pcd['bbox'][1]
+    z = pcd['bbox'][2]
+    l = pcd['bbox'][4]
+    w = pcd['bbox'][3]
+    h = pcd['bbox'][5]
+    rot = pcd['T_cam_obj'][:3, :3]
+    bbox = BoundingBox3D(x,y,z,l,w,h,rot)
+    return bbox
+
+def get_bbox_gt(pcd):
+    x = pcd['x']
+    y = pcd['y']
+    z = pcd['z']
+    l = pcd['length']
+    w = pcd['width']
+    h = pcd['height']
+    rot = pcd['rot'][:3, :3]
+    bbox = BoundingBox3D(x,y,z,l,w,h,rot)
+    return bbox
+
+
+def convert_to_lidar_cs(T_cam_obj_copy, length):
+    # Magic number
+    T_cam_obj = copy.deepcopy(T_cam_obj_copy)
+    x_rad = np.deg2rad(-90)
+    rot_x = np.array([[1, 0, 0], 
+                        [0, np.cos(x_rad), -np.sin(x_rad)], 
+                        [0, np.sin(x_rad), np.cos(x_rad)]])
+
+    z_rad = np.deg2rad(90)
+    rot_z = np.array([  [np.cos(z_rad), -np.sin(z_rad), 0], 
+                        [np.sin(z_rad),  np.cos(z_rad), 0], 
+                        [0       ,         0, 1]])
+    rot_velo_obj = rot_x @ rot_z 
+
+
+    t_velo = np.array([[-0, -1, -0, 0],
+                        [-0,  0, -1, -0],
+                        [ 1, -0, -0, -0],
+                        [ 0,  0,  0,  1]])
+
+    T_cam_obj[:3, :3] = T_cam_obj[:3, :3] / length
+    T_velo_obj = np.linalg.inv(t_velo) @ T_cam_obj
+    T_velo_obj[:3, :3] = T_velo_obj[:3, :3] @ rot_velo_obj
+
+    return T_velo_obj
