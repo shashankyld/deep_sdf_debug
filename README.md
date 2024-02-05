@@ -73,4 +73,4 @@ python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config
 ```
 Shashank:
 1. The naming of pts_cam_pcd, T_cam_obj seems to be wrong. velodyne in place of cam seems correct to me.
-2. The surface_points and pts_cam_pcd are not with a relative transform of T_cam_obj. small difference. Visible with car_no =  1; frame = 10
+2. [NOT TRUE] The surface_points and pts_cam_pcd are not with a relative transform of T_cam_obj. small difference. Visible with car_no =  1; frame = 10
