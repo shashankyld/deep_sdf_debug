@@ -17,7 +17,7 @@
 
 
 import open3d as o3d
-from bbox.metrics import iou_3ds
+from bbox.metrics import iou_3d
 from functools import partial
 import os
 from pathlib import Path

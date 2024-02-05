@@ -26,7 +26,19 @@ python dsp_slam/reconstruct_frame_no_render_term.py --config configs/config_kitt
 
 ## Jupyter notebook for cleaning data and extract to pcd extension
 
-1. Evaluate optimization
+1. Run all with table
+
+```bash
+python3 ours/run_all.py
+```
+
+2. Run all bash no table
+
+```bash
+./run_all.sh
+```
+
+3. Evaluate optimization
 
 ```bash
 python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config_kitti.json --sequence_dir data/P04/cleaned_data/000/000003/pcd.npy
