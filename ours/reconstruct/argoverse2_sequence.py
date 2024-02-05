@@ -155,7 +155,7 @@ class FrameWithLiDAR:
             #                        [0, 0, 0, 1]]).astype(np.float32)
             T_velo_obj = np.array([[np.cos(theta), 0, -np.sin(theta), trans[0]],
                                    [-np.sin(theta), 0, -np.cos(theta), trans[1]],
-                                   [0, 1, 0, trans[2] ],
+                                   [0, 1, 0, trans[2] + 0.20 ],
                                    [0, 0, 0, 1]]).astype(np.float32)
             # T_velo_obj = det['T_cam_obj'].astype(np.float32)
             # print("BEFORE T_velo_obj", T_velo_obj)

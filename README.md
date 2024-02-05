@@ -58,7 +58,7 @@ python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config
 python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config_kitti.json --sequence_dir data/P04/cleaned_data/001/001039/pcd.npy
 
 
-# decrease size of bbox or mesh
+# yaw
 # code motion
 # inconsidtent over time and no using for data of mulitple frame
 # ablation first frame vs multiple frame
