@@ -268,12 +268,14 @@ elif args.sequence_dir == "data/P04/cleaned_data/001/001038/pcd.npy":
 elif args.sequence_dir == "data/P04/cleaned_data/001/001039/pcd.npy":
     # The car drives in perpendicular direction
     gt = np.load("data/P04/gt/001/001039.npy",  allow_pickle=True).item()
+
+elif args.sequence_dir == "data/P04/cleaned_data/001/001046/pcd.npy":
+    # the car u-turns
+    gt = np.load("data/P04/gt/001/001046.npy",  allow_pickle=True).item()
+    # instance = pcd_track_uuids['945feec5-d2f5-49da-ab6d-c71f9402a23f']
+
 else:
     print("Ground truth not found")
-    # # the car u-turns - hard to clean #shashank
-    # yaw_filter=[[0, 180], [-0, -50]]
-    # pcd_track_uuids = np.load("data/P04/raw_data/001/001046/pcd.npy",  allow_pickle=True).item()
-    # instance = pcd_track_uuids['945feec5-d2f5-49da-ab6d-c71f9402a23f']
 
 pcd_track_uuids = np.load(args.sequence_dir,  allow_pickle=True).item()
 

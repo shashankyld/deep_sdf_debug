@@ -12,3 +12,4 @@ python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config
 python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config_kitti.json --sequence_dir data/P04/cleaned_data/001/001035/pcd.npy
 python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config_kitti.json --sequence_dir data/P04/cleaned_data/001/001038/pcd.npy
 python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config_kitti.json --sequence_dir data/P04/cleaned_data/001/001039/pcd.npy
+python ours/2_reconstruct_multiple_frame_argo_compare.py --config configs/config_kitti.json --sequence_dir data/P04/cleaned_data/001/001046/pcd.npy
