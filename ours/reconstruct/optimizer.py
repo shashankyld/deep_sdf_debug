@@ -96,9 +96,9 @@ class Optimizer(object):
         """
         # Always start from zero code
         if code is None:
-            latent_vector = torch.zeros(self.code_len).cuda()
+            latent_vector = torch.zeros(self.code_len).cuda().to(dtype=torch.float32)
         else:
-            latent_vector = torch.from_numpy(code[:self.code_len]).cuda()
+            latent_vector = torch.from_numpy(code[:self.code_len]).cuda().to(dtype=torch.float32)
 
         # Initial Pose Estimate
         t_cam_obj = torch.from_numpy(t_cam_obj).to(dtype=torch.float32)

@@ -23,7 +23,9 @@ import os
 from pathlib import Path
 import numpy as np
 import time
+import torch
 from typing import Callable, List, Tuple
+from scipy.spatial.transform import Rotation as R
 
 from reconstruct.argoverse2_sequence import Argoverse2Sequence
 from reconstruct.loss_utils import get_time
@@ -63,9 +65,11 @@ def register_key_callbacks(vis):
     # register_key_callback(["B"], set_black_background)
     # register_key_callback(["W"], set_white_background)
 
-def Reconstruct_Argoverse2(config, sequence_dir):
+def Reconstruct_Argoverse2(config, sequence_dir, mode="vanilla"):
 
     # visualizer
+    global block_vis
+    global play_crun
     block_vis = True
     play_crun = True
 
@@ -198,6 +202,8 @@ def Reconstruct_Argoverse2(config, sequence_dir):
                         [ 1, -0, -0, -0],
                         [ 0,  0,  0,  1]])
 
+    code = np.zeros(64)
+
     for frame_id, dets in detections.items():
         det = dets[0]
 
@@ -209,8 +215,14 @@ def Reconstruct_Argoverse2(config, sequence_dir):
         # r_t = R.from_matrix(T_velo_obj[:3, :3])
         # euler_T_velo_obj = r_t.as_euler('zxy', degrees=True)
         # print("euler_T_velo_obj\n", euler_T_velo_obj)
-
-        obj = optimizer.reconstruct_object(det.T_cam_obj, det.surface_points)
+        if mode == "vanilla":
+            obj = optimizer.reconstruct_object(det.T_cam_obj, det.surface_points)
+        elif mode == "code":
+            obj = optimizer.reconstruct_object(det.T_cam_obj, det.surface_points, code)
+            # print("code", code)
+            code = obj.code
+        else:
+            print("No mode")
         # obj.size = det.size
         # in case reconstruction fails
         if obj.code is None:
@@ -243,10 +255,12 @@ def Reconstruct_Argoverse2(config, sequence_dir):
     ############# Evaluation #############
     iou_gt_det = []
     iou_gt_opt = []
+    yaw_gt_det_list = []
+    yaw_gt_opt_list = []
     ############# Evaluation #############
                         
     mesh_extractor = MeshExtractor(decoder, voxels_dim=64)
-
+    decrease_scale = 1.1
     for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.items()):
 
         print("frame_id\n", frame_id)
@@ -308,7 +322,7 @@ def Reconstruct_Argoverse2(config, sequence_dir):
 
 
             t_velo_obj = convert_to_lidar_cs(objects_recon[first_frame].t_cam_obj, 1)
-            scale = np.sqrt(t_velo_obj[0, 0]**2 + t_velo_obj[1, 0]**2 + t_velo_obj[2, 0]**2)
+            scale = decrease_scale * np.sqrt(t_velo_obj[0, 0]**2 + t_velo_obj[1, 0]**2 + t_velo_obj[2, 0]**2)
             print("scale", scale)
             opt_line_bbox = BoundingBox3D(t_velo_obj[:3, 3][0], 
                                 t_velo_obj[:3, 3][1], t_velo_obj[:3, 3][2],
@@ -396,7 +410,7 @@ def Reconstruct_Argoverse2(config, sequence_dir):
 
 
             t_velo_obj = convert_to_lidar_cs(obj.t_cam_obj, 1)
-            scale = np.sqrt(t_velo_obj[0, 0]**2 + t_velo_obj[1, 0]**2 + t_velo_obj[2, 0]**2)
+            scale = decrease_scale * np.sqrt(t_velo_obj[0, 0]**2 + t_velo_obj[1, 0]**2 + t_velo_obj[2, 0]**2)
             print("scale", scale)
             # print("obj.t_cam_obj.size", obj.t_cam_obj.size)
             opt_line_bbox = BoundingBox3D(t_velo_obj[:3, 3][0], 
@@ -419,6 +433,27 @@ def Reconstruct_Argoverse2(config, sequence_dir):
         
 
         ############# Evaluation #############
+        
+        mtx_r = R.from_matrix(mtx[:3, :3])
+        gt_mtx_r = R.from_matrix(gt_mtx[:3, :3])
+        # print("gt_mtx", gt_mtx)
+        opt_mtx_r = R.from_matrix(t_velo_obj[:3, :3]/scale)
+        # print("t_velo_obj[:3, :3]/scale", t_velo_obj[:3, :3]/scale)
+
+        yaw_gt_mtx = gt_mtx_r.as_euler('zxy', degrees=True)[0]
+        yaw_mtx = mtx_r.as_euler('zxy', degrees=True)[0]
+        yaw_opt_mtx = opt_mtx_r.as_euler('zxy', degrees=True)[0]
+        # print("yaw_gt_mtx", gt_mtx_r.as_euler('zxy', degrees=True))
+        # print("yaw_opt_mtx", opt_mtx_r.as_euler('zxy', degrees=True))
+
+        yaw_gt_det = np.abs(yaw_gt_mtx - yaw_mtx)
+        yaw_gt_opt = np.abs(yaw_gt_mtx - yaw_opt_mtx)
+        if yaw_gt_det < 10 and yaw_gt_opt < 10:
+            yaw_gt_det_list.append(yaw_gt_det)
+            yaw_gt_opt_list.append(yaw_gt_opt)
+            print("YAW detection, optimization(Should be better)", yaw_gt_det, yaw_gt_opt)
+
+
         iou_bbox_det = iou_3d(gt_bbox.iou, bbox.iou)
         iou_bbox_opt = iou_3d(gt_bbox.iou, opt_line_bbox.iou)
         # print("bbox, opt_line_bbox(For evaluate Visualization, ignored)", iou_3d(bbox.iou, opt_line_bbox.iou))
@@ -436,5 +471,7 @@ def Reconstruct_Argoverse2(config, sequence_dir):
 
     print("Mean iou, Ground Truth vs Detection", np.mean(iou_gt_det))
     print("Mean iou, Ground Truth vs Optimization", np.mean(iou_gt_opt))
-    return np.mean(iou_gt_det), np.mean(iou_gt_opt)
+    print("Mean yaw, Ground Truth vs Detection", np.mean(yaw_gt_det_list))
+    print("Mean yaw, Ground Truth vs Optimization", np.mean(yaw_gt_opt_list))
+    return np.mean(iou_gt_det), np.mean(iou_gt_opt), np.mean(yaw_gt_det_list), np.mean(yaw_gt_opt_list), 
     vis.destroy_window()
