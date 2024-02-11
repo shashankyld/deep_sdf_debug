@@ -48,7 +48,7 @@ sequence_s = [
     "001035",
     "001038",
     "001039",
-    "001046",
+    # "001046", no longer use
 ]
 
 console = Console()
