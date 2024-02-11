@@ -239,7 +239,7 @@ def Reconstruct_Argoverse2(config, sequence_dir, mode="vanilla"):
     ############# Evaluation #############
                         
     mesh_extractor = MeshExtractor(decoder, voxels_dim=64)
-    decrease_scale = 1.1
+    decrease_scale = 1
     for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.items()):
 
         print("frame_id\n", frame_id)
