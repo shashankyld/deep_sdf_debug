@@ -84,66 +84,45 @@ def Reconstruct_Argoverse2(config, sequence_dir, mode="vanilla"):
     kitti_seq = Argoverse2Sequence(sequence_dir_path, configs)
     optimizer = Optimizer(decoder, configs)
 
-
-    if sequence_dir == "000003":
-        # The detected car is being overtaken.
-        gt = np.load("data/P04/gt/000/000003.npy",  allow_pickle=True).item()
-
-    elif sequence_dir == "000009":
+    if sequence_dir == "000009":
         # A car is driving in the opposite direction and is turning.
         gt = np.load("data/P04/gt/000/000009.npy",  allow_pickle=True).item()
 
-    elif sequence_dir == "000011":
-        # The car drives in a perpendicular direction.
-        gt = np.load("data/P04/gt/000/000011.npy",  allow_pickle=True).item()
+    elif sequence_dir == "002001":
+        # no describtion.
+        gt = np.load("data/P04/gt/002/002001.npy",  allow_pickle=True).item()
 
-    elif sequence_dir == "000021":
-        # A car is turning right.
-        gt = np.load("data/P04/gt/000/000021.npy",  allow_pickle=True).item()
+    elif sequence_dir == "002002":
+        # ortho.
+        gt = np.load("data/P04/gt/002/002002.npy",  allow_pickle=True).item()
 
-    elif sequence_dir == "000030":
-        # The car drives in a perpendicular direction.
-        gt = np.load("data/P04/gt/000/000030.npy",  allow_pickle=True).item()
+    elif sequence_dir == "002007":
+        # ortho.
+        gt = np.load("data/P04/gt/002/002007.npy",  allow_pickle=True).item()
         
-    elif sequence_dir == "000049":
-        # The ego-car is being overtaken -> change to this car goes straight.
-        gt = np.load("data/P04/gt/000/000049.npy",  allow_pickle=True).item()
+    elif sequence_dir == "002022":
+        # opposite direction.
+        gt = np.load("data/P04/gt/002/002022.npy",  allow_pickle=True).item()
 
-    elif sequence_dir == "001000":
-        # The ego-car is turning left 
-        gt = np.load("data/P04/gt/001/001000.npy",  allow_pickle=True).item()
+    elif sequence_dir == "002028":
+        # opposite direction 
+        gt = np.load("data/P04/gt/002/002028.npy",  allow_pickle=True).item()
 
-    elif sequence_dir == "001005":
-        # The detected car is turning right and then goes straight
-        gt = np.load("data/P04/gt/001/001005.npy",  allow_pickle=True).item()
+    elif sequence_dir == "002031":
+        # turning car.
+        gt = np.load("data/P04/gt/002/002031.npy",  allow_pickle=True).item()
 
-    elif sequence_dir == "001006":
-        # The detected car comes from an alley and merges into the main road.
-        gt = np.load("data/P04/gt/001/001006.npy",  allow_pickle=True).item()
+    elif sequence_dir == "002038":
+        # turning on opposite direction.
+        gt = np.load("data/P04/gt/002/002038.npy",  allow_pickle=True).item()
 
-    elif sequence_dir == "001007":
-        # The detected car goes straight and turns right.
-        gt = np.load("data/P04/gt/001/001007.npy",  allow_pickle=True).item()
+    elif sequence_dir == "002046":
+        # turning.
+        gt = np.load("data/P04/gt/002/002046.npy",  allow_pickle=True).item()
 
-    elif sequence_dir == "001027":
-        # The detected car comes from the opposite direction and turns left.
-        gt = np.load("data/P04/gt/001/001027.npy",  allow_pickle=True).item()
-
-    elif sequence_dir == "001035":
-        # The detected car is turning right
-        gt = np.load("data/P04/gt/001/001035.npy",  allow_pickle=True).item()
-
-    elif sequence_dir == "001038":
-        # The detected car is turning left
-        gt = np.load("data/P04/gt/001/001038.npy",  allow_pickle=True).item()
-
-    elif sequence_dir == "001039":
-        # The car drives in perpendicular direction
-        gt = np.load("data/P04/gt/001/001039.npy",  allow_pickle=True).item()
-
-    elif sequence_dir == "001046":
-        # the car u-turns
-        gt = np.load("data/P04/gt/001/001046.npy",  allow_pickle=True).item()
+    elif sequence_dir == "002048":
+        # turning.
+        gt = np.load("data/P04/gt/002/002048.npy",  allow_pickle=True).item()
 
     else:
         print("Ground truth not found")

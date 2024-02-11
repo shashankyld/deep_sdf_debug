@@ -92,65 +92,45 @@ kitti_seq = Argoverse2Sequence(args.sequence_dir, configs)
 optimizer = Optimizer(decoder, configs)
 
 
-if args.sequence_dir == "data/P04/cleaned_data/000/000003/pcd.npy":
-    # The detected car is being overtaken.
-    gt = np.load("data/P04/gt/000/000003.npy",  allow_pickle=True).item()
-
-elif args.sequence_dir == "data/P04/cleaned_data/000/000009/pcd.npy":
+if args.sequence_dir == "data/P04/cleaned_data/000/000009/pcd.npy":
     # A car is driving in the opposite direction and is turning.
     gt = np.load("data/P04/gt/000/000009.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/000/000011/pcd.npy":
-    # The car drives in a perpendicular direction.
-    gt = np.load("data/P04/gt/000/000011.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002001/pcd.npy":
+    # no describtion.
+    gt = np.load("data/P04/gt/002/002001.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/000/000021/pcd.npy":
-    # A car is turning right.
-    gt = np.load("data/P04/gt/000/000021.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002002/pcd.npy":
+    # ortho.
+    gt = np.load("data/P04/gt/002/002002.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/000/000030/pcd.npy":
-    # The car drives in a perpendicular direction.
-    gt = np.load("data/P04/gt/000/000030.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002007/pcd.npy":
+    # ortho.
+    gt = np.load("data/P04/gt/002/002007.npy",  allow_pickle=True).item()
     
-elif args.sequence_dir == "data/P04/cleaned_data/000/000049/pcd.npy":
-    # The ego-car is being overtaken -> change to this car goes straight.
-    gt = np.load("data/P04/gt/000/000049.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002022/pcd.npy":
+    # opposite direction.
+    gt = np.load("data/P04/gt/002/002022.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/001/001000/pcd.npy":
-    # The ego-car is turning left 
-    gt = np.load("data/P04/gt/001/001000.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002028/pcd.npy":
+    # opposite direction 
+    gt = np.load("data/P04/gt/002/002028.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/001/001005/pcd.npy":
-    # The detected car is turning right and then goes straight
-    gt = np.load("data/P04/gt/001/001005.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002031/pcd.npy":
+    # turning car.
+    gt = np.load("data/P04/gt/002/002031.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/001/001006/pcd.npy":
-    # The detected car comes from an alley and merges into the main road.
-    gt = np.load("data/P04/gt/001/001006.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002038/pcd.npy":
+    # turning on opposite direction.
+    gt = np.load("data/P04/gt/002/002038.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/001/001007/pcd.npy":
-    # The detected car goes straight and turns right.
-    gt = np.load("data/P04/gt/001/001007.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002046/pcd.npy":
+    # turning.
+    gt = np.load("data/P04/gt/002/002046.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/001/001027/pcd.npy":
-    # The detected car comes from the opposite direction and turns left.
-    gt = np.load("data/P04/gt/001/001027.npy",  allow_pickle=True).item()
-
-elif args.sequence_dir == "data/P04/cleaned_data/001/001035/pcd.npy":
-    # The detected car is turning right
-    gt = np.load("data/P04/gt/001/001035.npy",  allow_pickle=True).item()
-
-elif args.sequence_dir == "data/P04/cleaned_data/001/001038/pcd.npy":
-    # The detected car is turning left
-    gt = np.load("data/P04/gt/001/001038.npy",  allow_pickle=True).item()
-
-elif args.sequence_dir == "data/P04/cleaned_data/001/001039/pcd.npy":
-    # The car drives in perpendicular direction
-    gt = np.load("data/P04/gt/001/001039.npy",  allow_pickle=True).item()
-
-elif args.sequence_dir == "data/P04/cleaned_data/001/001046/pcd.npy":
-    # the car u-turns
-    gt = np.load("data/P04/gt/001/001046.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002048/pcd.npy":
+    # turning.
+    gt = np.load("data/P04/gt/002/002048.npy",  allow_pickle=True).item()
 
 else:
     print("Ground truth not found")
