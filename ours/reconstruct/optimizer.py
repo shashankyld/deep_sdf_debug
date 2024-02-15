@@ -19,7 +19,7 @@ import math
 import numpy as np
 import torch
 from reconstruct.utils import ForceKeyErrorDict, create_voxel_grid, convert_sdf_voxels_to_mesh
-from reconstruct.loss import compute_sdf_loss, compute_render_loss, compute_rotation_loss_sim3
+from reconstruct.loss import compute_sdf_loss, compute_render_loss, compute_rotation_loss_sim3, sliding_window_compute_sdf_loss, compute_sliding_window_rotation_loss_sim3
 from reconstruct.loss_utils import decode_sdf, get_robust_res, exp_se3, exp_sim3, get_time
 
 
