@@ -235,3 +235,47 @@ def compute_rotation_loss_sim3(t_obj_cam):
     J_sim3[3:6] = J_rot
 
     return J_sim3, res_rot
+
+
+def compute_sliding_window_rotation_loss_sim3(list_t_obj_cam):
+    """
+    :param t_obj_cam: c2o transformation (4, 4) in Sim(3) for each frame
+    :return: Jacobian and residual of rotation regularization term for each frame
+    """
+    # E_rot = 1 - ry * ng
+    
+    list_t_cam_obj = [torch.inverse(list_t_obj_cam[i]) for i in range(len(list_t_obj_cam))]
+
+    list_r_co = [list_t_cam_obj[i][:3, :3] for i in range(len(list_t_cam_obj))]
+    
+    list_scale = [torch.det(list_r_co[i]) ** (1 / 3) for i in range(len(list_r_co))]
+    
+    list_r_co = [list_r_co[i] / list_scale[i] for i in range(len(list_r_co))]
+    
+    list_r_oc = [torch.inverse(list_r_co[i]) for i in range(len(list_r_co))]
+
+    ey = torch.tensor([0., 1., 0.])
+    ng = torch.tensor([0., -1., 0.])
+    
+    list_ry = [torch.mv(list_r_co[i], ey) for i in range(len(list_r_co))]
+
+    res_rot = []
+    for i in range(len(list_ry)):
+        res_rot.append(1. - torch.dot(list_ry[i], ng))
+
+    
+   
+    if all(res_rot_element < 1e-7 for res_rot_element in res_rot):
+        return [torch.zeros(7)]*len(list_t_obj_cam), [0.]*len(list_t_obj_cam)
+
+    
+    list_J_rot = [torch.cross(torch.mv(list_r_oc[i], ng), ey) for i in range(len(list_r_oc))]
+    
+
+    
+    list_J_sim3 = [torch.zeros(7) for i in range(len(list_t_obj_cam))]
+    for i in range(len(list_r_oc)):
+        list_J_sim3[i][3:6] = list_J_rot[i]
+    res_rot = torch.tensor(res_rot)
+    return list_J_sim3, res_rot
+
