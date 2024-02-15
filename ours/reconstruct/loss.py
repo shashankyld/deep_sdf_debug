@@ -43,6 +43,65 @@ def compute_sdf_loss(decoder, pts_surface_cam, t_obj_cam, latent_vector):
     return jac_toc, jac_code, res_sdf
 
 
+def sliding_window_compute_sdf_loss(decoder, list_pts_surface_cam, list_t_obj_cam, latent_vector):
+    """
+    :param decoder: DeepSDF decoder
+    :param pts_surface_cam: surface points under camera coordinate (N, 3) for each frame
+    :param t_obj_cam: c2o transformation (4, 4) in Sim(3) for each frame
+    :param latent_vector: shape code
+    :return: Jacobian wrt pose (N, 1, 7), Jacobian wrt shape code (N, 1, code_len), error residuals (N, 1, 1)
+    """
+    # (n_sample_surface, 3)
+    
+    list_pts_surface_obj = []
+    for i in range(len(list_pts_surface_cam)):
+        pts_surface_obj = \
+            (list_pts_surface_cam[i][..., None, :] * list_t_obj_cam[i].cuda()[:3, :3]).sum(-1) + list_t_obj_cam[i].cuda()[:3, 3]
+        list_pts_surface_obj.append(pts_surface_obj)
+        # print("pts_surface_obj", pts_surface_obj.shape)
+    # print("list_pts_surface_obj", len(list_pts_surface_obj[0]))
+    complete_pts_surface_obj = torch.cat(list_pts_surface_obj, dim=0)
+    # print("complete_pts_surface_obj", complete_pts_surface_obj.shape)
+    # print("complete_pts_surface_obj", complete_pts_surface_obj.shape)
+    res_sdf, de_di = get_batch_sdf_jacobian(decoder, latent_vector, complete_pts_surface_obj, 1)
+    # print("res_sdf", res_sdf.shape)
+    # print("de_di", de_di.shape)
+    # Jacobian for code
+    jac_code = de_di[..., :-3]
+    # print("jac_code", jac_code.shape)
+    # SDF term Jacobian for points
+    de_dxo = de_di[..., -3:]
+    # print("de_dxo", de_dxo.shape)
+    list_de_dxo = []
+    total_points_covered_so_far = 0
+    for i in range(len(list_pts_surface_cam)):
+        # i_de_dxo = de_dxo[i*len(list_pts_surface_obj[i]):(i+1)*len(list_pts_surface_obj[i])]
+        i_de_dxo = de_dxo[total_points_covered_so_far:total_points_covered_so_far+len(list_pts_surface_obj[i])]
+        # print("individual de_dxo", i_de_dxo.shape)
+        # print("points in this scan", len(list_pts_surface_obj[i]))
+        total_points_covered_so_far += len(list_pts_surface_obj[i])
+        # print("total_points", total_points_covered_so_far)
+        list_de_dxo.append(i_de_dxo)
+
+    # Jacobian for pose
+    list_dxo_dtoc = []
+    for i in range(len(list_pts_surface_cam)):
+        dxo_dtoc = get_points_to_pose_jacobian_sim3(list_pts_surface_obj[i])
+        # print("individual dxo_dtoc", dxo_dtoc.shape)
+        list_dxo_dtoc.append(dxo_dtoc)
+    # dxo_dtoc = get_points_to_pose_jacobian_sim3(pts_surface_obj)
+    list_jac_toc = []
+    # print("len(list_pts_surface_cam)", len(list_pts_surface_cam))
+    for i in range(len(list_pts_surface_cam)):
+        # print("break at i", i)
+        # print("shape of list_de_dxo[i]", list_de_dxo[i].shape)
+        # print("shape of list_dxo_dtoc[i]", list_dxo_dtoc[i].shape)
+        jac_toc = torch.bmm(list_de_dxo[i], list_dxo_dtoc[i])
+        list_jac_toc.append(jac_toc)
+    # print("jac_toc", jac_toc)
+
+    return list_jac_toc, jac_code, res_sdf
+
 def compute_render_loss(decoder, ray_directions, depth_obs, t_obj_cam, sampled_ray_depth, latent_vector, th=0.01):
     """
     :param decoder: DeepSDF decoder
