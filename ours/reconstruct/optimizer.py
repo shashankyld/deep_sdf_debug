@@ -209,6 +209,176 @@ class Optimizer(object):
                                  is_good=True, loss=loss)
 
 
+    def sliding_window_reconstruct_object(self, list_t_cam_obj, list_pts, sliding_window_size = 30, code=None):
+    # def reconstruct_object(self, t_cam_obj, pts, rays, depth, code=None):
+        """
+        :param t_cam_obj: object pose, object-to-camera transformation for each frame
+        :param pts: surface points, under camera coordinate (M, 3) for each frame
+        :param rays: sampled ray directions (N, 3)
+        :param depth: depth values (K,) only contain foreground pixels, K = M for KITTI
+        :return: optimized opject pose and shape, saved as a dict
+        """
+        # Always start from zero code
+        if code is None:
+            latent_vector = torch.zeros(self.code_len).cuda().to(dtype=torch.float32)
+        else:
+            latent_vector = torch.from_numpy(code[:self.code_len]).cuda().to(dtype=torch.float32)
+
+        # Initial Pose Estimate
+        
+        list_t_cam_obj = [torch.from_numpy(t_cam_obj).to(dtype=torch.float32) for t_cam_obj in list_t_cam_obj[0:sliding_window_size]]
+        list_t_obj_cam = [torch.inverse(t_cam_obj) for t_cam_obj in list_t_cam_obj]
+        
+        list_pts_surface = [torch.from_numpy(pts).cuda().float() for pts in list_pts[0:sliding_window_size]]
+        start = get_time()
+        loss = 0.
+        for e in range(self.num_iterations_joint_optim):
+            # print("current iteration: ", e)
+            # get depth range and sample points along the rays
+            list_t_cam_obj = [torch.inverse(t_obj_cam) for t_obj_cam in list_t_obj_cam]
+            list_scale = [torch.det(t_cam_obj[:3, :3]) ** (1 / 3) for t_cam_obj in list_t_cam_obj]
+            # print("length of list_t_cam_obj: ", len(list_t_cam_obj))
+            # print("length of list_pts_surface: ", len(list_pts_surface))
+            sdf_rst = sliding_window_compute_sdf_loss(self.decoder, list_pts_surface, list_t_obj_cam, latent_vector)
+            if sdf_rst is None:
+                return ForceKeyErrorDict(t_cam_obj=None, code=None, is_good=False, loss=loss) #TODO
+            else:
+                # de_dsim3_sdf, de_dc_sdf, res_sdf = sdf_rst
+                list_de_dsim3_sdf, de_dc_sdf, res_sdf = sdf_rst
+                # print("individual list_de_dsim3_sdf: ", list_de_dsim3_sdf[0].shape)
+                # print("de_dc_sdf: ", de_dc_sdf.shape)
+                # print("res_sdf: ", res_sdf.shape)
+
+            robust_res_sdf, sdf_loss, _ = get_robust_res(res_sdf, self.b2) 
+            if math.isnan(sdf_loss):
+                return ForceKeyErrorDict(t_cam_obj=None, code=None, is_good=False, loss=loss) #TODO
+
+            
+            # 3. Rotation prior
+
+            list_drot_dsim3, res_rot = compute_sliding_window_rotation_loss_sim3(list_t_obj_cam)
+            rot_loss = res_rot
+            loss = self.k2 * sdf_loss
+            z = latent_vector.cpu()
+
+            # Compute Jacobian and Hessia
+            pose_dim = 7
+            list_de_dse3_sdf = [de_dsim3_sdf[..., :6] for de_dsim3_sdf in list_de_dsim3_sdf]
+            list_de_dscale_sdf = [de_dsim3_sdf[..., 6] for de_dsim3_sdf in list_de_dsim3_sdf]
+            # print("individual list_de_dse3_sdf: ", list_de_dse3_sdf[0].shape)
+            # print("individual list_de_dscale_sdf: ", list_de_dscale_sdf[0].shape)
+            window_size = len(list_de_dsim3_sdf)
+            total_equations = sum([de_dsim3_sdf.shape[0] for de_dsim3_sdf in list_de_dsim3_sdf])
+            total_unknowns = window_size * 6 + 1 + self.code_len # 6 for each pose, 1 for scale, self.code_len for code
+            # Points in each frame list
+            # print("de_dc_sdf: ", de_dc_sdf)
+            # print("de_dse3_sdf: ", list_de_dse3_sdf)
+            # print("de_dscale_sdf: ", list_de_dscale_sdf)
+            J_sdf = torch.zeros(total_equations, total_unknowns)
+            # print("J_sdf: ", J_sdf.shape)
+            total_points_covered_so_far = 0
+            for i in range(window_size):
+                # print("frame number: ", i)
+                # print("dimesions being changed: ", total_points_covered_so_far, total_points_covered_so_far+list_pts_surface[i].shape[0])
+                # print("right hand side: ", list_de_dse3_sdf[i].squeeze().shape)
+                J_sdf[total_points_covered_so_far:total_points_covered_so_far+list_pts_surface[i].shape[0], i*6:(i+1)*6] = list_de_dse3_sdf[i].squeeze()
+                J_sdf[total_points_covered_so_far:total_points_covered_so_far+list_pts_surface[i].shape[0], window_size*6] = list_de_dscale_sdf[i].squeeze()
+                # print("dimensions being changed code: ", total_points_covered_so_far, total_points_covered_so_far+list_pts_surface[i].shape[0])
+                # print("right hand side code: ", de_dc_sdf.squeeze()[total_points_covered_so_far:total_points_covered_so_far+list_pts_surface[i].shape[0], :].shape)
+                J_sdf[total_points_covered_so_far:total_points_covered_so_far+list_pts_surface[i].shape[0], window_size*6+1:] = de_dc_sdf.squeeze()[total_points_covered_so_far:total_points_covered_so_far+list_pts_surface[i].shape[0], :]
+                total_points_covered_so_far += list_pts_surface[i].shape[0]
+                # J_sdf[i*list_pts_surface[i].shape[0]:(i+1)*list_pts_surface[i].shape[0], i*6:(i+1)*6] = list_de_dse3_sdf[i].squeeze()
+                # J_sdf[i*list_pts_surface[i].shape[0]:(i+1)*list_pts_surface[i].shape[0], window_size*6] = list_de_dscale_sdf[i].squeeze()
+                # J_sdf[i*list_pts_surface[i].shape[0]:(i+1)*list_pts_surface[i].shape[0], window_size*6+1:] = de_dc_sdf.squeeze()[i*list_pts_surface[i].shape[0]:(i+1)*list_pts_surface[i].shape[0], :]
+            # print("shape of J_sdf.unsqueeze(1): ", J_sdf.unsqueeze(1).shape)
+            # print("shape of J_sdf.unsqueeze(1).transpose(-2, -1): ", J_sdf.unsqueeze(1).transpose(-2, -1).shape)
+            # print("shape of robust_res_sdf: ", robust_res_sdf.shape)
+            
+            H_sdf = self.k2 * torch.bmm(J_sdf.unsqueeze(1).transpose(-2, -1), J_sdf.unsqueeze(1)).sum(0).squeeze().cpu() / J_sdf.shape[0]
+            # Check device of J_sdf and robust_res_sdf
+            # print("J_sdf.device: ", J_sdf.device)
+            # print("robust_res_sdf.device: ", robust_res_sdf.device)
+            b_sdf = -self.k2 * torch.bmm(J_sdf.unsqueeze(1).transpose(-2, -1).cuda(), robust_res_sdf).sum(0).squeeze().cpu() / J_sdf.shape[0]
+            # print("shape of H_sdf: ", H_sdf.shape)
+            # print("shape of b_sdf: ", b_sdf.shape)
+
+            H = H_sdf
+            
+            # H[pose_dim:pose_dim + self.code_len, pose_dim:pose_dim + self.code_len] += self.k3 * torch.eye(self.code_len)
+            H[-self.code_len:, -self.code_len:] += self.k3 * torch.eye(self.code_len)
+            b = b_sdf
+            b[-self.code_len:] -= self.k3 * z
+
+            # Rotation regularization
+            # drot_dsim3 = drot_dsim3.unsqueeze(0)
+            list_drot_dsim3 = [drot_dsim3.unsqueeze(0) for drot_dsim3 in list_drot_dsim3]
+            # print("individual drot_dsim3: ", list_drot_dsim3[0].shape)
+            J_rot = torch.zeros(window_size, window_size*6+1)
+            # print("shape of J_rot: ", J_rot.shape)
+            for i in range(window_size):
+                J_rot[i, i*6:(i+1)*6] = list_drot_dsim3[i].squeeze()[0:6]
+                J_rot[i, window_size*6] = list_drot_dsim3[i].squeeze()[6]
+            H_rot = torch.mm(J_rot.transpose(-2, -1), J_rot)
+            # print("shape of H_rot: ", H_rot.shape)
+            res_rot = torch.tensor(res_rot).unsqueeze(1)
+            # print("shape of res_rot: ", res_rot.shape)
+            # print("J_rot: ", J_rot)
+            # print("res_rot: ", res_rot)
+            
+            b_rot = -(J_rot.transpose(-2, -1) @ res_rot).squeeze()
+
+            
+            # print("shape of b_rot: ", b_rot.shape)
+
+            H[:window_size*6+1, :window_size*6+1] += self.k4 * H_rot
+            b[:window_size*6+1] -= self.k4 * b_rot
+            rot_loss = torch.sum(res_rot)
+
+
+            # print("shape of J_rot: ", J_rot.shape)
+            # H_rot = torch.mm(drot_dsim3.transpose(-2, -1), drot_dsim3)
+            # b_rot = -(drot_dsim3.transpose(-2, -1) * res_rot).squeeze()
+            # H[:pose_dim, :pose_dim] += self.k4 * H_rot
+            # b[:pose_dim] -= self.k4 * b_rot
+            # rot_loss = res_rot
+            '''
+            print("J_sdf: ", J_sdf.shape)
+            print("J_sdf: ", J_sdf)
+            print("shape of H: ", H.shape)
+            print("H: ", e, H)
+            '''
+            # add a small damping to the pose part
+            # H[:pose_dim, :pose_dim] += 1e0 * torch.eye(pose_dim)
+            # H[pose_dim-1, pose_dim-1] += self.s_damp  # add a large damping for scale
+            # solve for the update vector
+            dx = torch.mv(torch.inverse(H), b)
+            # print("shape of dx: ", dx.shape)
+            # 7 Dimensional optimized transformation
+            list_T_opt = [exp_sim3(self.lr * torch.cat((dx[i*6:(i+1)*6],dx[window_size*6].unsqueeze(0)), dim = 0)) for i in range(window_size)]
+            # print("individual shape of list_T_opt: ", list_T_opt[0].shape)
+            # Apply the optimized transformation to the original transformation
+            list_t_obj_cam = [torch.mm(list_T_opt[i], list_t_obj_cam[i]) for i in range(window_size)]
+            delta_c = dx[window_size*6+1:]
+            latent_vector += self.lr * delta_c.cuda()
+            
+            # print("Transformation: ", list_t_obj_cam[0])
+            # print("Transformation: ", list_t_obj_cam[1])
+            # print("loss: ", loss)
+            
+
+            print("Object joint optimization: Iter %d, loss: %f, sdf loss: %f, rotation loss: %f" % (e, loss, sdf_loss, rot_loss))
+
+        end = get_time()
+        # print("Reconstruction takes %f seconds" % (end - start))
+        # Convert everthing to numpy
+        list_t_cam_obj = [torch.inverse(t_obj_cam).cpu().numpy() for t_obj_cam in list_t_obj_cam]
+        list_pts_surface = [pts_surface.cpu().numpy() for pts_surface in list_pts_surface]
+
+        return ForceKeyErrorDict(list_t_cam_obj=list_t_cam_obj,
+                                 list_pts_surface=list_pts_surface,
+                                 unique_code=latent_vector.cpu().numpy(),
+                                 is_good=True, loss=loss)
+
 class MeshExtractor(object):
     def __init__(self, decoder, code_len=64, voxels_dim=64):
         self.decoder = decoder
