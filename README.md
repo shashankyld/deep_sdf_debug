@@ -4,6 +4,12 @@
 ./install.sh
 ```
 
+## Sliding Window Optimization
+```bash
+python ours/sliding_window_reconstruct_multiple_frame_argo.py --config configs/config_kitti.json --sequence_dir data/P04/cleaned_data/000/000003/pcd.npy
+```
+
+
 ## Deep_SDF in DSP-SLAM default
 
 ```bash
