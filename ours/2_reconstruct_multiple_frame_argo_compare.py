@@ -15,121 +15,25 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>
 #
 
-import argparse
+
 import open3d as o3d
-from bbox import  BBox3D
 from bbox.metrics import iou_3d
-import copy
-from dataclasses import dataclass, field
 from functools import partial
 import os
 from pathlib import Path
 import numpy as np
 import time
 from typing import Callable, List, Tuple
-from scipy.spatial.transform import Rotation as R
 
-from reconstruct.utils import color_table, set_view, get_configs, get_decoder, translate_boxes_to_open3d_instance
-from reconstruct.loss_utils import get_time
-from reconstruct.kitti_sequence import KITIISequence
 from reconstruct.argoverse2_sequence import Argoverse2Sequence
+from reconstruct.loss_utils import get_time
 from reconstruct.optimizer import Optimizer, MeshExtractor
+from reconstruct.utils import color_table, set_view, get_configs, get_decoder, \
+                                translate_boxes_to_open3d_instance, config_parser, BoundingBox3D, \
+                                change_bbox, get_bbox, get_bbox_gt, convert_to_lidar_cs
 
 
-def config_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('-c', '--config', type=str, required=True, help='path to config file')
-    parser.add_argument('-d', '--sequence_dir', type=str, required=True, help='path to kitti sequence')
-    # parser.add_argument('-i', '--frame_id', type=int, required=True, help='frame id')
-    return parser
 
-@dataclass
-class BoundingBox3D:
-    '''
-    pose in s-frame
-    '''
-    x: float
-    y: float
-    z: float
-    length: float
-    width: float
-    height: float
-    rot: float
-    iou: BBox3D = field(init=False, repr=False)
-
-    def __post_init__(self):
-        r = R.from_matrix(self.rot)
-        q8d_xyzw = r.as_quat()
-        euler = r.as_euler('zxy', degrees=True)
-        # print("euler", euler)
-        q8d = np.array([q8d_xyzw[3], q8d_xyzw[0], q8d_xyzw[1], q8d_xyzw[2]])
-        # print("q8d", q8d)
-        self.iou: BBox3D = BBox3D(self.x, self.y, self.z, 
-                                         self.length, self.width, 
-                                         self.height, q=q8d)
-
-
-def translate_boxes_to_open3d_instance(bbox, crop=False):
-    """
-          4 -------- 6
-         /|         /|
-        5 -------- 3 .
-        | |        | |
-        . 7 -------- 1
-        |/         |/
-        2 -------- 0
-    https://github.com/open-mmlab/OpenPCDet/blob/master/tools/visual_utils/open3d_vis_utils.py
-    """
-    center = [bbox.x, bbox.y, bbox.z]
-    lwh = [bbox.length, bbox.width, bbox.height]
-    if not crop:
-        box3d = o3d.geometry.OrientedBoundingBox(center, bbox.rot, lwh)
-    else:
-        lwh = [bbox.length, bbox.width, bbox.height * 0.9]
-        box3d = o3d.geometry.OrientedBoundingBox(center, bbox.rot, lwh)
-
-    line_set = o3d.geometry.LineSet.create_from_oriented_bounding_box(box3d)
-    lines = np.asarray(line_set.lines)
-    lines = np.concatenate([lines, np.array([[1, 4], [7, 6]])], axis=0)
-
-    line_set.lines = o3d.utility.Vector2iVector(lines)
-    
-
-    return line_set, box3d
-
-def change_bbox(line_set, bbox):
-    center = [bbox.x, bbox.y, bbox.z]
-    lwh = [bbox.length, bbox.width, bbox.height]
-    box3d = o3d.geometry.OrientedBoundingBox(center, bbox.rot, lwh)
-        
-    line_set = o3d.geometry.LineSet.create_from_oriented_bounding_box(box3d)
-    lines = np.asarray(line_set.lines)
-    lines = np.concatenate([lines, np.array([[1, 4], [7, 6]])], axis=0)
-
-    line_set.lines = o3d.utility.Vector2iVector(lines)
-
-def get_bbox(pcd):
-    x = pcd['bbox'][0]
-    y = pcd['bbox'][1]
-    z = pcd['bbox'][2]
-    l = pcd['bbox'][4]
-    w = pcd['bbox'][3]
-    h = pcd['bbox'][5]
-    rot = pcd['T_cam_obj'][:3, :3]
-    bbox = BoundingBox3D(x,y,z,l,w,h,rot)
-    return bbox
-
-
-def get_bbox_gt(pcd):
-    x = pcd['x']
-    y = pcd['y']
-    z = pcd['z']
-    l = pcd['length']
-    w = pcd['width']
-    h = pcd['height']
-    rot = pcd['rot'][:3, :3]
-    bbox = BoundingBox3D(x,y,z,l,w,h,rot)
-    return bbox
 
 # visualizer
 block_vis = True
@@ -167,31 +71,6 @@ def register_key_callbacks():
     # register_key_callback(["W"], set_white_background)
 
 
-def convert_to_lidar_cs(T_cam_obj_copy, length):
-    # Magic number
-    T_cam_obj = copy.deepcopy(T_cam_obj_copy)
-    x_rad = np.deg2rad(-90)
-    rot_x = np.array([[1, 0, 0], 
-                        [0, np.cos(x_rad), -np.sin(x_rad)], 
-                        [0, np.sin(x_rad), np.cos(x_rad)]])
-
-    z_rad = np.deg2rad(90)
-    rot_z = np.array([  [np.cos(z_rad), -np.sin(z_rad), 0], 
-                        [np.sin(z_rad),  np.cos(z_rad), 0], 
-                        [0       ,         0, 1]])
-    rot_velo_obj = rot_x @ rot_z 
-
-
-    t_velo = np.array([[-0, -1, -0, 0],
-                        [-0,  0, -1, -0],
-                        [ 1, -0, -0, -0],
-                        [ 0,  0,  0,  1]])
-
-    T_cam_obj[:3, :3] = T_cam_obj[:3, :3] / length
-    T_velo_obj = np.linalg.inv(t_velo) @ T_cam_obj
-    T_velo_obj[:3, :3] = T_velo_obj[:3, :3] @ rot_velo_obj
-
-    return T_velo_obj
 ###########################################################################################################
 ###########################################################################################################
 ###########################################################################################################
@@ -213,67 +92,48 @@ kitti_seq = Argoverse2Sequence(args.sequence_dir, configs)
 optimizer = Optimizer(decoder, configs)
 
 
-if args.sequence_dir == "data/P04/cleaned_data/000/000003/pcd.npy":
-    # The detected car is being overtaken.
-    gt = np.load("data/P04/gt/000/000003.npy",  allow_pickle=True).item()
-
-elif args.sequence_dir == "data/P04/cleaned_data/000/000009/pcd.npy":
+if args.sequence_dir == "data/P04/cleaned_data/000/000009/pcd.npy":
     # A car is driving in the opposite direction and is turning.
     gt = np.load("data/P04/gt/000/000009.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/000/000011/pcd.npy":
-    # The car drives in a perpendicular direction.
-    gt = np.load("data/P04/gt/000/000011.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002001/pcd.npy":
+    # no describtion.
+    gt = np.load("data/P04/gt/002/002001.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/000/000021/pcd.npy":
-    # A car is turning right.
-    gt = np.load("data/P04/gt/000/000021.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002002/pcd.npy":
+    # ortho.
+    gt = np.load("data/P04/gt/002/002002.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/000/000030/pcd.npy":
-    # The car drives in a perpendicular direction.
-    gt = np.load("data/P04/gt/000/000030.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002007/pcd.npy":
+    # ortho.
+    gt = np.load("data/P04/gt/002/002007.npy",  allow_pickle=True).item()
     
-elif args.sequence_dir == "data/P04/cleaned_data/000/000049/pcd.npy":
-    # The ego-car is being overtaken -> change to this car goes straight.
-    gt = np.load("data/P04/gt/000/000049.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002022/pcd.npy":
+    # opposite direction.
+    gt = np.load("data/P04/gt/002/002022.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/001/001000/pcd.npy":
-    # The ego-car is turning left 
-    gt = np.load("data/P04/gt/001/001000.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002028/pcd.npy":
+    # opposite direction 
+    gt = np.load("data/P04/gt/002/002028.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/001/001005/pcd.npy":
-    # The detected car is turning right and then goes straight
-    gt = np.load("data/P04/gt/001/001005.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002031/pcd.npy":
+    # turning car.
+    gt = np.load("data/P04/gt/002/002031.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/001/001006/pcd.npy":
-    # The detected car comes from an alley and merges into the main road.
-    gt = np.load("data/P04/gt/001/001006.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002038/pcd.npy":
+    # turning on opposite direction.
+    gt = np.load("data/P04/gt/002/002038.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/001/001007/pcd.npy":
-    # The detected car goes straight and turns right.
-    gt = np.load("data/P04/gt/001/001007.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002046/pcd.npy":
+    # turning.
+    gt = np.load("data/P04/gt/002/002046.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/001/001027/pcd.npy":
-    # The detected car comes from the opposite direction and turns left.
-    gt = np.load("data/P04/gt/001/001027.npy",  allow_pickle=True).item()
+elif args.sequence_dir == "data/P04/cleaned_data/002/002048/pcd.npy":
+    # turning.
+    gt = np.load("data/P04/gt/002/002048.npy",  allow_pickle=True).item()
 
-elif args.sequence_dir == "data/P04/cleaned_data/001/001035/pcd.npy":
-    # The detected car is turning right
-    gt = np.load("data/P04/gt/001/001035.npy",  allow_pickle=True).item()
-
-elif args.sequence_dir == "data/P04/cleaned_data/001/001038/pcd.npy":
-    # The detected car is turning left
-    gt = np.load("data/P04/gt/001/001038.npy",  allow_pickle=True).item()
-
-elif args.sequence_dir == "data/P04/cleaned_data/001/001039/pcd.npy":
-    # The car drives in perpendicular direction
-    gt = np.load("data/P04/gt/001/001039.npy",  allow_pickle=True).item()
 else:
     print("Ground truth not found")
-    # # the car u-turns - hard to clean #shashank
-    # yaw_filter=[[0, 180], [-0, -50]]
-    # pcd_track_uuids = np.load("data/P04/raw_data/001/001046/pcd.npy",  allow_pickle=True).item()
-    # instance = pcd_track_uuids['945feec5-d2f5-49da-ab6d-c71f9402a23f']
 
 pcd_track_uuids = np.load(args.sequence_dir,  allow_pickle=True).item()
 

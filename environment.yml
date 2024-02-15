@@ -11,6 +11,7 @@ dependencies:
     - open3d==0.18.0
     - opencv-python==4.8.1.78
     - plyfile==1.0.1
+    - rich==13.7.0
     - scikit-image==0.20.0
     - scipy
     - torch==2.1.0
