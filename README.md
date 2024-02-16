@@ -1,3 +1,10 @@
+PPT:
+1. Full point cloud - car suraface at the origin
+2. show reconstruction
+3. next step - put points at a transform
+4. goal is to optimize even now, estimate transform
+5. show visualization - mention need for good initialization
+
 # install environment
 
 ```sh
