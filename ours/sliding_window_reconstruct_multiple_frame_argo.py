@@ -37,7 +37,7 @@ from reconstruct.utils import color_table, set_view, get_configs, get_decoder, \
 
 # visualizer
 block_vis = True
-play_crun = True
+play_crun = False
 
 
 def quit(vis):
@@ -148,6 +148,10 @@ elif args.sequence_dir == "data/P04/cleaned_data/001/001039/pcd.npy":
     # The car drives in perpendicular direction
     gt = np.load("data/P04/gt/001/001039.npy",  allow_pickle=True).item()
 
+elif args.sequence_dir == "data/P04/cleaned_data/002/002001/pcd.npy":
+    # The car drives in perpendicular direction
+    gt = np.load("data/P04/gt/002/002001.npy",  allow_pickle=True).item()
+
 elif args.sequence_dir == "data/P04/cleaned_data/001/001046/pcd.npy":
     # the car u-turns
     gt = np.load("data/P04/gt/001/001046.npy",  allow_pickle=True).item()
@@ -199,6 +203,8 @@ for frame_id in instances[first_instance]:
     det = kitti_seq.get_frame_by_id(frame_id)
     detections[frame_id] = det
 print("len(detections)", len(detections))
+# Print detection frame numbers
+print("detection frame numbers", list(detections.keys()))
 ############# Get detection #############
 
 ############# Start reconstruction #############
@@ -211,15 +217,40 @@ t_velo = np.array([[-0, -1, -0, 0],
 
 list_T_cam_obj = []
 list_surface_points = []
+frame_numbers_list = []
+
+# dict_T_cam_obj = {}
+# dict_surface_points = {}
+
+
 for frame_id, dets in detections.items():
     det = dets[0]
+    frame_numbers_list.append(frame_id)
     # print("det", det)
     list_T_cam_obj.append(det.T_cam_obj)
+    # dict_T_cam_obj[frame_id] = det.T_cam_obj
+    # Print scale factor of the t_cam_obj before dataset creation
+    print("scale factor before dataset creation", np.sqrt(det.T_cam_obj[0, 0]**2 + det.T_cam_obj[1, 0]**2 + det.T_cam_obj[2, 0]**2))
     list_surface_points.append(det.surface_points)
+    # dict_surface_points[frame_id] = det.surface_points
 
-print("list_T_cam_obj", len(list_T_cam_obj))
-print("list_surface_points", len(list_surface_points))
-obj = optimizer.sliding_window_reconstruct_object(list_T_cam_obj, list_surface_points)
+print("frame numbers list: ", frame_numbers_list)
+sliding_window_size = 40
+beginning_frame_number  = 0
+sliding_window_start_frame = frame_numbers_list[beginning_frame_number]
+
+frames_to_optimize = [i for i in range(sliding_window_start_frame, sliding_window_start_frame + sliding_window_size) if i in frame_numbers_list]
+print("frames_to_optimize", frames_to_optimize)
+number_of_frames_to_optimize = len(frames_to_optimize)
+print("number_of_frames_to_optimize", number_of_frames_to_optimize)
+# frames to optimize in the list, starts with beginning_frame_number, length is sliding_window_size or less, miss  frames if (frame number in list + i) not in frame_numbers_list
+frames_to_optimize_in_list = [beginning_frame_number + i for i in range(number_of_frames_to_optimize)]
+print("frames_to_optimize_in_list", frames_to_optimize_in_list) 
+obj = optimizer.sliding_window_reconstruct_object(
+    [list_T_cam_obj[i] for i in frames_to_optimize_in_list],
+    [list_surface_points[i] for i in frames_to_optimize_in_list],
+    sliding_window_size=sliding_window_size
+)
 end = get_time()
 print("Reconstructed %d objects in the scene, time elapsed: %f seconds" % (len(obj.list_t_cam_obj), end - start))
 
@@ -240,6 +271,10 @@ list_pts_surface = obj["list_pts_surface"]
 list_t_cam_obj = obj["list_t_cam_obj"]
 optimized_code = obj["unique_code"]
 loss = obj["loss"]
+print("list_pts_surface", len(list_pts_surface))
+print("list_t_cam_obj", len(list_t_cam_obj))
+print("optimized_code", optimized_code)
+print("loss", loss)
 
 # for i in range(total_frames):
 #     objects_recon[i] = {}
@@ -248,11 +283,16 @@ loss = obj["loss"]
 #     objects_recon[i]['code'] = optimized_code
 #     objects_recon[i]["loss"] = loss
 #     objects_recon[i]["is_good"] = True
+first_frame = frame_numbers_list[0]
 
-for i in range(total_frames):
+count = 0
+for i in frames_to_optimize:
+    
+    print("frame_number added to object_recon: ", i)
+    # frame_number = frame_numbers_list[i]
     # Create a ForceKeyErrorDict instance for each frame
-    obj = ForceKeyErrorDict(t_cam_obj=list_t_cam_obj[i],
-                            pts_surface=list_pts_surface[i],
+    obj = ForceKeyErrorDict(t_cam_obj=list_t_cam_obj[count],
+                            pts_surface=list_pts_surface[count],
                             code=optimized_code,
                             is_good=True,
                             loss=loss)
@@ -260,16 +300,18 @@ for i in range(total_frames):
     # Print scale factor of the t_cam_obj
     print("scale factor", np.sqrt(obj.t_cam_obj[0, 0]**2 + obj.t_cam_obj[1, 0]**2 + obj.t_cam_obj[2, 0]**2))
     objects_recon[i] = obj
+    count += 1
 
 # print("objects_recon", objects_recon)
-
+print("objects_recon: ", objects_recon.keys())
 
 ############# Find first frames #############
 # Find the first frame in reconstruction object
-first_frame = 0
+
 for k, _ in objects_recon.items():
     first_frame = k
     break
+print("first_frame", first_frame)
 ############# Find first frames #############
 
 
@@ -291,11 +333,14 @@ iou_gt_opt = []
                     
 mesh_extractor = MeshExtractor(decoder, voxels_dim=64)
 
-for (frame_id, points_scan), (_, obj) in zip(instance.items(), objects_recon.items()):
+print("Instance Items", instance.keys())
+# Creating a Instance dict with only subset of the keys
+instance_sliding_window = {k: instance[k] for k in frames_to_optimize}
+for (frame_id, points_scan), (_, obj) in zip(instance_sliding_window.items(), objects_recon.items()):
     
     print("frame_id\n", frame_id)
     if frame_id == first_frame:
-
+        print("coming from first frame")
         ############# Bounding boxes #############
         # Check wrong yaw detection
         mtx = instance[first_frame]['T_cam_obj']
